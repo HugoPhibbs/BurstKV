@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "go: build",
+            "type": "shell",
+            "command": "go build -o bin/burstkv.exe ./cmd/burstkv",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$go"]
+        },
+        {
+            "label": "go: run",
+            "type": "shell",
+            "command": "./bin/burstkv.exe",
+            "dependsOn": "go: build",
+            "problemMatcher": []
+        }
+    ]
+}
