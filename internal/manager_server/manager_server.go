@@ -32,12 +32,12 @@ func New(dbManager *db_manager.DBManager) *gin.Engine {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(200, gin.H{"url": new_db.Url(), "databaseId": new_db.Id()})
+		c.JSON(200, gin.H{"address": new_db.Address(), "databaseId": new_db.Id()})
 	})
 
 	router.DELETE("/database/delete/:databaseId", func(c *gin.Context) {
 		databaseId := c.Param("databaseId")
-		 err := dbManager.DeleteDatabase(databaseId)
+		err := dbManager.DeleteDatabase(databaseId)
 		if err != nil {
 			if err == db_manager.ErrDatabaseNotFound {
 				c.JSON(404, gin.H{"error": "Database not found"})
@@ -70,7 +70,7 @@ func New(dbManager *db_manager.DBManager) *gin.Engine {
 
 	router.POST("/database/resume/:databaseId", func(c *gin.Context) {
 		databaseId := c.Param("databaseId")
-		url, err := dbManager.ResumeDatabase(databaseId)
+		address, err := dbManager.ResumeDatabase(databaseId)
 		if err != nil {
 			if err == db_manager.ErrDatabaseAlreadyActive {
 				c.JSON(409, gin.H{"error": "Database is already active"})
@@ -83,7 +83,7 @@ func New(dbManager *db_manager.DBManager) *gin.Engine {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(200, gin.H{"url": url})
+		c.JSON(200, gin.H{"address": address})
 	})
 
 	return router

@@ -58,7 +58,20 @@ func NewDBManager(runtime db_runtime.DBRuntime, idleLimit time.Duration) *DBMana
 	}
 }
 
-// Generates a random string of length n from lower/uppercase letters and digits. 
+func (m *DBManager) DatabaseAddress(databaseId string) (string, error) {
+	status := m.GetDatabaseState(databaseId)
+	if status == NotFound {
+		return "", ErrDatabaseNotFound
+	}
+	if status == Paused {
+		return "", ErrDatabasePaused
+	}
+
+	database, _ := m.databases[databaseId]
+	return database.Address(), nil
+}
+
+// Generates a random string of length n from lower/uppercase letters and digits.
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, n)
@@ -89,17 +102,17 @@ func (m *DBManager) GetAllDatabaseIDs() []string {
 func (m *DBManager) CreateDatabase() (*redis_db.RedisDB, error) {
 	new_database_id := randomString(DB_ID_LENGTH)
 
-	url, err := m.runtime.CreateDatabase(new_database_id)
+	address, err := m.runtime.CreateDatabase(new_database_id)
 	if err != nil {
 		return nil, err
 	}
 
-	new_db := redis_db.NewRedisDB(url, new_database_id)
+	new_db := redis_db.NewRedisDB(address, new_database_id)
 	m.databases[new_database_id] = new_db
 	return new_db, nil
 }
 
-// Deletes the database with the given ID. 
+// Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
 func (m *DBManager) DeleteDatabase(databaseId string) error {
 	dbState := m.GetDatabaseState(databaseId)
@@ -147,12 +160,12 @@ func (m *DBManager) ResumeDatabase(databaseId string) (string, error) {
 		return "", ErrDatabaseAlreadyActive
 	}
 
-	url, err := m.runtime.ResumeDatabase(databaseId)
+	address, err := m.runtime.ResumeDatabase(databaseId)
 	if err != nil {
 		return "", err
 	}
 
 	database := m.databases[databaseId]
-	database.Resume(url)
-	return url, nil
+	database.Resume(address)
+	return address, nil
 }

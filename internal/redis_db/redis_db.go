@@ -3,36 +3,36 @@ package redis_db
 import "time"
 
 type RedisDB struct {
-	id string
+	id          string
 	lastRequest time.Time
-	url string
+	address     string
 }
 
-func NewRedisDB(url string, id string) *RedisDB {
+func NewRedisDB(address string, id string) *RedisDB {
 	return &RedisDB{
-		url: url,
-		id: id,
+		address: address,
+		id:      id,
 	}
 }
 
-func (db *RedisDB) Url() string {
-	return db.url
+func (db *RedisDB) Address() string {
+	return db.address
 }
 
 func (db *RedisDB) Id() string {
 	return db.id
 }
 
-func (db *RedisDB) Resume(url string) {
-	db.url = url
+func (db *RedisDB) Resume(address string) {
+	db.address = address
 }
 
 func (db *RedisDB) Pause() {
-	db.url = ""
+	db.address = ""
 }
 
 func (db *RedisDB) IsActive() bool {
-	return db.url != ""
+	return db.address != ""
 }
 
 func (db *RedisDB) UpdateLastRequest() {
