@@ -9,24 +9,31 @@ import (
 func New(dbManager *db_manager.DBManager) *gin.Engine {
 	router := gin.Default()
 
-	router.GET("/database/status/:databaseId", func(c *gin.Context) {
-		databaseId := c.Param("databaseId")
-		state := dbManager.GetDatabaseState(databaseId)
-
-		if state == db_manager.NotFound {
-			c.JSON(404, gin.H{"error": "Database not found"})
-			return
-		}
-
-		c.JSON(200, gin.H{"state": state.String()})
-	})
-
 	router.GET("/database/list", func(c *gin.Context) {
 		databases := dbManager.GetAllDatabaseIDs()
+		if databases == nil {
+			databases = []string{}
+		}
 		c.JSON(200, gin.H{"databases": databases})
 	})
 
-	router.POST("/database/create", func(c *gin.Context) {
+	router.GET("/database/:databaseId", func(c *gin.Context) {
+		databaseId := c.Param("databaseId")
+		database, err := dbManager.GetDatabase(databaseId)
+		if err != nil {
+			if err == db_manager.ErrDatabaseNotFound {
+				c.JSON(404, gin.H{"error": "Database not found"})
+				return
+			}
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		status := dbManager.GetDatabaseState(databaseId)
+		c.JSON(200, gin.H{"address": database.Address(), "status": status.String(), "lastRequest": database.LastRequestTime()})
+	})
+
+	router.POST("/database", func(c *gin.Context) {
 		new_db, err := dbManager.CreateDatabase()
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
