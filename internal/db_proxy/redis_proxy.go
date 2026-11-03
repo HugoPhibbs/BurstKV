@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -17,27 +16,37 @@ import (
 // Max args / bytes per arg accepted in the first command, so a bad client can't make us allocate huge buffers.
 const maxFirstCommandSize = 1024
 
-// A single TCP proxy in front of all databases. Clients connect with redis://:<db-id>@host:port,
-// so the first command they send is AUTH or HELLO carrying the database ID as the password.
-// The proxy reads that ID, then forwards the connection's bytes untouched to that database.
-type DBProxy struct {
+type activityReader struct {
+	r io.Reader
+	recordActivity func()
+}
+
+func (ar *activityReader) Read(p []byte) (int, error) {
+	n, err := ar.r.Read(p)
+	if n > 0 {
+		ar.recordActivity()
+	}
+	return n, err
+}
+
+type RedisProxy struct {
 	listenAddr string
 	db_manager *db_manager.DBManager
 }
 
-func NewDBProxy(listenAddr string, db_manager *db_manager.DBManager) *DBProxy {
-	return &DBProxy{listenAddr: listenAddr, db_manager: db_manager}
+func NewRedisProxy(listenAddr string, db_manager *db_manager.DBManager) *RedisProxy {
+	return &RedisProxy{listenAddr: listenAddr, db_manager: db_manager}
 }
 
 // Listens on listenAddr and proxies every connection. Blocks.
-func (p *DBProxy) ListenAndServe() error {
+func (p *RedisProxy) ListenAndServe() error {
 	ln, err := net.Listen("tcp", p.listenAddr)
 	if err != nil {
 		return err
 	}
 	defer ln.Close()
 	log.Printf("proxy: listening on %s", p.listenAddr)
-	
+
 	for {
 		client, err := ln.Accept()
 		if err != nil {
@@ -47,7 +56,7 @@ func (p *DBProxy) ListenAndServe() error {
 	}
 }
 
-func (p *DBProxy) handle(client net.Conn) {
+func (p *RedisProxy) handle(client net.Conn) {
 	defer client.Close()
 
 	// Everything read while parsing is copied into `first`, so it can be replayed upstream as-is.
@@ -77,13 +86,13 @@ func (p *DBProxy) handle(client net.Conn) {
 	}
 	defer upstream.Close()
 
-	// Copy both ways; when either side finishes, return so the deferred Closes end the other copy.
+	recordActivity := func() { p.db_manager.RecordDatabaseActivity(databaseId) }
 	done := make(chan struct{}, 2)
 	pipe := func(dst io.Writer, src io.Reader) {
 		io.Copy(dst, src)
 		done <- struct{}{}
 	}
-	go pipe(upstream, io.MultiReader(&first, client))
+	go pipe(upstream, &activityReader{r: io.MultiReader(&first, client), recordActivity: recordActivity})
 	go pipe(client, upstream)
 	<-done
 }
