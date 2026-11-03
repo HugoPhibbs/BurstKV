@@ -118,29 +118,29 @@ func (l *LocalDBRuntime) CreateDatabase(databaseId string) (string, error) {
 }
 
 // Deletes a local database with the given ID
-func (l *LocalDBRuntime) DeleteDatabase(databaseId string) (bool, error) {
+func (l *LocalDBRuntime) DeleteDatabase(databaseId string) error {
 	remove_cmd := exec.Command("docker", "rm", "-f", l.databaseContainerName(databaseId))
 	if err := remove_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
 	remove_vols_cmd := exec.Command("docker", "volume", "rm", l.databaseVolumeName(databaseId))
 	if err := remove_vols_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // Pauses a local database with the given ID
-func (l *LocalDBRuntime) PauseDatabase(databaseId string) (bool, error) {
+func (l *LocalDBRuntime) PauseDatabase(databaseId string) error {
 	pause_cmd := exec.Command("docker", "stop", l.databaseContainerName(databaseId))
 	if err := pause_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
 	remove_cmd := exec.Command("docker", "rm", l.databaseContainerName(databaseId))
 	if err := remove_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // Resumes a local database with the given ID
@@ -159,7 +159,7 @@ func (l *LocalDBRuntime) acquirePort() (int, error) {
 		}
 	}
 	portOccupied := func(port int) bool {
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err != nil {
 			return true
 		}
