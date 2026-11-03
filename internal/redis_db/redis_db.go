@@ -1,10 +1,13 @@
 package redis_db
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 type RedisDB struct {
 	id          string
-	lastRequest time.Time
+	lastRequest atomic.Int64 // thread-safe
 	address     string
 }
 
@@ -35,10 +38,22 @@ func (db *RedisDB) IsActive() bool {
 	return db.address != ""
 }
 
-func (db *RedisDB) UpdateLastRequest() {
-	db.lastRequest = time.Now()
+func (db *RedisDB) RecordActivity() {
+	db.lastRequest.Store(time.Now().Unix())
 }
 
-func (db *RedisDB) LastRequest() time.Time {
-	return db.lastRequest
+func (db *RedisDB) LastRequestTime() *time.Time {
+	if db.lastRequest.Load() == 0 {
+		return nil
+	}
+	t := time.Unix(db.lastRequest.Load(), 0)
+	return &t
+}
+
+func (db *RedisDB) IsActiveAndIdle(idleLimit time.Duration) bool {
+	lastRequest := db.LastRequestTime()
+	if lastRequest == nil {
+		return false
+	}
+	return db.IsActive() && time.Since(*lastRequest) > idleLimit
 }
