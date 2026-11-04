@@ -1,4 +1,5 @@
 package db_manager
+//go:build ignore
 
 import (
 	"errors"

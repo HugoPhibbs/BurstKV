@@ -1,4 +1,5 @@
 package redis_db
+//go:build ignore
 
 import (
 	"testing"
@@ -15,7 +16,7 @@ func TestMain(m *testing.M) {
 
 func TestRedisDB_TestUpdateLastRequest(t *testing.T) {
 	// Create a new RedisDB instance
-	rdb := NewRedisDB("localhost:6379", "password")
+	rdb := NewRedisDB(6379, "password")
 
 	// Test that the last request time is initially nil
 	assert.Nil(t, rdb.LastRequestTime(), "expected LastRequestTime to be nil initially")

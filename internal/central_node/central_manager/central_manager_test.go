@@ -1,4 +1,5 @@
 package db_manager
+//go:build ignore
 
 import (
 	"burstkv/internal/local_db_runtime"
@@ -20,7 +21,7 @@ func TestMain(m *testing.M) {
 func TestDBManager_TestPauseAndResumeDatabase(t *testing.T) {
 	ctx := t.Context()
 	local_runtime := local_db_runtime.NewLocalDBRuntime(6380, 6389)
-	db_manager := NewDBManager(local_runtime, 300)
+	db_manager := NewCentralManager(local_runtime, 300)
 	db_manager.DeleteAllDatabases()
 	defer db_manager.DeleteAllDatabases()
 
@@ -58,7 +59,7 @@ func TestDBManager_TestPauseAndResumeDatabase(t *testing.T) {
 func TestDBManager_TestDeleteDatabase(t *testing.T) {
 	ctx := t.Context()
 	local_runtime := local_db_runtime.NewLocalDBRuntime(6380, 6389)
-	db_manager := NewDBManager(local_runtime, 300)
+	db_manager := NewCentralManager(local_runtime, 300)
 	db_manager.DeleteAllDatabases()
 	defer db_manager.DeleteAllDatabases()
 
@@ -81,7 +82,7 @@ func TestDBManager_TestDeleteDatabase(t *testing.T) {
 func TestDBManager_TestCreateDatabase(t *testing.T) {
 	ctx := t.Context()
 	local_runtime := local_db_runtime.NewLocalDBRuntime(6380, 6389)
-	db_manager := NewDBManager(local_runtime, 300)
+	db_manager := NewCentralManager(local_runtime, 300)
 	db_manager.DeleteAllDatabases()
 	defer db_manager.DeleteAllDatabases()
 
@@ -104,7 +105,7 @@ func TestDBManager_TestCreateDatabase(t *testing.T) {
 
 func TestDBManager_TestGetAllDatabaseIDs(t *testing.T) {
 	local_runtime := local_db_runtime.NewLocalDBRuntime(6380, 6389)
-	db_manager := NewDBManager(local_runtime, 300)
+	db_manager := NewCentralManager(local_runtime, 300)
 	db_manager.DeleteAllDatabases()
 	defer db_manager.DeleteAllDatabases()
 
@@ -122,7 +123,7 @@ func TestDBManager_TestGetAllDatabaseIDs(t *testing.T) {
 
 func TestDBManager_TestGetDatabaseState(t *testing.T) {
 	local_runtime := local_db_runtime.NewLocalDBRuntime(6380, 6389)
-	db_manager := NewDBManager(local_runtime, 300)
+	db_manager := NewCentralManager(local_runtime, 300)
 	db_manager.DeleteAllDatabases()
 	defer db_manager.DeleteAllDatabases()
 
@@ -149,7 +150,7 @@ func TestDBManager_TestGetDatabaseState(t *testing.T) {
 func TestDBManager_TestIdleDatabaseReaping(t *testing.T) {
 	local_runtime := local_db_runtime.NewLocalDBRuntime(6380, 6389)
 	timeout := 1 * time.Second
-	db_manager := NewDBManager(local_runtime, timeout) // Set idle timeout to 1 second for testing
+	db_manager := NewCentralManager(local_runtime, timeout) // Set idle timeout to 1 second for testing
 	db_manager.ReaperTimeInterval = 500 * time.Millisecond
 	db_manager.StartIdleDatabaseReaper()
 

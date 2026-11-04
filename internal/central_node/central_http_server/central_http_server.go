@@ -1,4 +1,5 @@
 package manager_server
+//go:build ignore
 
 import (
 	"burstkv/internal/db_manager"
