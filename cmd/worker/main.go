@@ -4,7 +4,6 @@ import (
 	"burstkv/internal/core/redis_proxy"
 	"burstkv/internal/worker_node/worker_grpc_server"
 	"burstkv/internal/worker_node/worker_manager"
-	"burstkv/internal/worker_node/worker_redis_router"
 	"context"
 	"log"
 	"os"
@@ -22,7 +21,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	proxy := redis_proxy.NewRedisProxy(":6380", worker_redis_router.NewWorkerRedisRouter(wm))
+	proxy := redis_proxy.NewRedisProxy(":6380", wm)
 
 	go func() {
 		log.Default().Println("Redis proxy listening on :6380")
