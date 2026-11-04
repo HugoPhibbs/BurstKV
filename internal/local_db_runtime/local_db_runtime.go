@@ -2,17 +2,11 @@ package local_db_runtime
 
 import (
 	"burstkv/internal/db_runtime"
-	"burstkv/internal/redis_db"
-	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os/exec"
-	"strings"
-
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/client"
 )
 
 const REDIS_IMAGE = "redis:8.10.3"
@@ -41,44 +35,6 @@ func NewLocalDBRuntime(minPort, maxPort int) *LocalDBRuntime {
 // Formats an address for a local Redis DB (no protocol prefix)
 func (l *LocalDBRuntime) formatAddress(port int) string {
 	return fmt.Sprintf("localhost:%d", port)
-}
-
-// Finds existing local databases and returns a list of them
-func (l *LocalDBRuntime) FindExistingDatabases() ([]*redis_db.RedisDB, error) {
-	docker_client, err := client.New(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-	defer docker_client.Close()
-
-	res, err := docker_client.ContainerList(context.Background(), client.ContainerListOptions{
-		All:     true,
-		Filters: make(client.Filters).Add("name", CONTAINER_PREFIX),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var dbs []*redis_db.RedisDB
-	for _, c := range res.Items {
-		name := strings.TrimPrefix(c.Names[0], "/")
-
-		id := strings.TrimPrefix(name, CONTAINER_PREFIX)
-
-		address := ""
-		if c.State == container.StateRunning {
-			for _, p := range c.Ports {
-				if p.PrivatePort == 6379 && p.PublicPort != 0 {
-					address = l.formatAddress(int(p.PublicPort))
-					break
-				}
-			}
-		}
-
-		dbs = append(dbs, redis_db.NewRedisDB(address, id))
-	}
-
-	return dbs, nil
 }
 
 // The name of a database's data volume

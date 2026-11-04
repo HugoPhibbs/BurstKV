@@ -43,19 +43,9 @@ type DBManager struct {
 
 // Creates a new DBManager with the given runtime and idle limit
 func NewDBManager(runtime db_runtime.DBRuntime, idleLimit time.Duration) *DBManager {
-	preexisting_dbs, err := runtime.FindExistingDatabases()
-	if err != nil {
-		panic(err)
-	}
-
-	databases := make(map[string]*redis_db.RedisDB)
-	for _, db := range preexisting_dbs {
-		databases[db.Id()] = db
-	}
-
 	return &DBManager{
 		runtime:   runtime,
-		databases: databases,
+		databases: make(map[string]*redis_db.RedisDB),
 		idleLimit: idleLimit,
 		ReaperTimeInterval: DEFAULT_REAPER_TIME_INTERVAL,
 	}
