@@ -17,6 +17,12 @@
             "command": "./bin/burstkv.exe",
             "dependsOn": "go: build",
             "problemMatcher": []
+        },
+        {
+            "label": "act: PR",
+            "type": "shell",
+            "command": "act pull_request",
+            "problemMatcher": []
         }
     ]
 }
