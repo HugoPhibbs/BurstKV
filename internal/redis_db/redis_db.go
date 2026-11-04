@@ -1,44 +1,59 @@
 package redis_db
 
-import "time"
+import (
+	"sync/atomic"
+	"time"
+)
 
 type RedisDB struct {
-	id string
-	lastRequest time.Time
-	url string
+	id          string
+	lastRequest atomic.Int64 // thread-safe
+	address     string
 }
 
-func NewRedisDB(url string, id string) *RedisDB {
+func NewRedisDB(address string, id string) *RedisDB {
 	return &RedisDB{
-		url: url,
-		id: id,
+		address: address,
+		id:      id,
 	}
 }
 
-func (db *RedisDB) Url() string {
-	return db.url
+func (db *RedisDB) Address() string {
+	return db.address
 }
 
 func (db *RedisDB) Id() string {
 	return db.id
 }
 
-func (db *RedisDB) Resume(url string) {
-	db.url = url
+func (db *RedisDB) Resume(address string) {
+	db.address = address
 }
 
 func (db *RedisDB) Pause() {
-	db.url = ""
+	db.address = ""
 }
 
 func (db *RedisDB) IsActive() bool {
-	return db.url != ""
+	return db.address != ""
 }
 
-func (db *RedisDB) UpdateLastRequest() {
-	db.lastRequest = time.Now()
+func (db *RedisDB) RecordActivity() {
+	db.lastRequest.Store(time.Now().Unix())
 }
 
-func (db *RedisDB) LastRequest() time.Time {
-	return db.lastRequest
+func (db *RedisDB) LastRequestTime() *time.Time {
+	if db.lastRequest.Load() == 0 {
+		return nil
+	}
+	t := time.Unix(db.lastRequest.Load(), 0)
+	return &t
+}
+
+func (db *RedisDB) IsActiveAndIdle(idleLimit time.Duration) bool {
+	lastRequest := db.LastRequestTime()
+	if lastRequest == nil {
+		return false
+	}
+	return db.IsActive() && time.Since(*lastRequest) > idleLimit
 }

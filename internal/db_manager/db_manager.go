@@ -11,6 +11,7 @@ import (
 )
 
 const DB_ID_LENGTH = 8
+const DEFAULT_REAPER_TIME_INTERVAL = 1 * time.Minute
 
 type DBState int
 
@@ -37,28 +38,33 @@ type DBManager struct {
 	runtime   db_runtime.DBRuntime
 	databases map[string]*redis_db.RedisDB
 	idleLimit time.Duration
+	ReaperTimeInterval time.Duration 
 }
 
 // Creates a new DBManager with the given runtime and idle limit
 func NewDBManager(runtime db_runtime.DBRuntime, idleLimit time.Duration) *DBManager {
-	preexisting_dbs, err := runtime.FindExistingDatabases()
-	if err != nil {
-		panic(err)
-	}
-
-	databases := make(map[string]*redis_db.RedisDB)
-	for _, db := range preexisting_dbs {
-		databases[db.Id()] = db
-	}
-
 	return &DBManager{
 		runtime:   runtime,
-		databases: databases,
+		databases: make(map[string]*redis_db.RedisDB),
 		idleLimit: idleLimit,
+		ReaperTimeInterval: DEFAULT_REAPER_TIME_INTERVAL,
 	}
 }
 
-// Generates a random string of length n from lower/uppercase letters and digits. 
+func (m *DBManager) DatabaseAddress(databaseId string) (string, error) {
+	status := m.GetDatabaseState(databaseId)
+	if status == NotFound {
+		return "", ErrDatabaseNotFound
+	}
+	if status == Paused {
+		return "", ErrDatabasePaused
+	}
+
+	database, _ := m.databases[databaseId]
+	return database.Address(), nil
+}
+
+// Generates a random string of length n from lower/uppercase letters and digits.
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, n)
@@ -80,6 +86,14 @@ func (m *DBManager) GetDatabaseState(databaseId string) DBState {
 	return NotFound
 }
 
+func (m *DBManager) GetDatabase(databaseId string) (*redis_db.RedisDB, error) {
+	database, exists := m.databases[databaseId]
+	if !exists {
+		return nil, ErrDatabaseNotFound
+	}
+	return database, nil
+}
+
 // Returns a list of all database IDs managed by this DBManager.
 func (m *DBManager) GetAllDatabaseIDs() []string {
 	return slices.Collect(maps.Keys(m.databases))
@@ -89,17 +103,17 @@ func (m *DBManager) GetAllDatabaseIDs() []string {
 func (m *DBManager) CreateDatabase() (*redis_db.RedisDB, error) {
 	new_database_id := randomString(DB_ID_LENGTH)
 
-	url, err := m.runtime.CreateDatabase(new_database_id)
+	address, err := m.runtime.CreateDatabase(new_database_id)
 	if err != nil {
 		return nil, err
 	}
 
-	new_db := redis_db.NewRedisDB(url, new_database_id)
+	new_db := redis_db.NewRedisDB(address, new_database_id)
 	m.databases[new_database_id] = new_db
 	return new_db, nil
 }
 
-// Deletes the database with the given ID. 
+// Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
 func (m *DBManager) DeleteDatabase(databaseId string) error {
 	dbState := m.GetDatabaseState(databaseId)
@@ -107,11 +121,30 @@ func (m *DBManager) DeleteDatabase(databaseId string) error {
 		return ErrDatabaseNotFound
 	}
 
-	_, err := m.runtime.DeleteDatabase(databaseId)
+	err := m.runtime.DeleteDatabase(databaseId)
 	if err != nil {
 		return err
 	}
 	delete(m.databases, databaseId)
+	return nil
+}
+
+func (m *DBManager) DeleteAllDatabases() error {
+	for id := range m.databases {
+		err := m.DeleteDatabase(id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *DBManager) RecordDatabaseActivity(databaseId string) error {
+	database, exists := m.databases[databaseId]
+	if !exists {
+		return ErrDatabaseNotFound
+	}
+	database.RecordActivity()
 	return nil
 }
 
@@ -126,7 +159,7 @@ func (m *DBManager) PauseDatabase(databaseId string) error {
 		return ErrDatabaseAlreadyPaused
 	}
 
-	_, err := m.runtime.PauseDatabase(databaseId)
+	err := m.runtime.PauseDatabase(databaseId)
 	if err != nil {
 		return err
 	}
@@ -147,12 +180,34 @@ func (m *DBManager) ResumeDatabase(databaseId string) (string, error) {
 		return "", ErrDatabaseAlreadyActive
 	}
 
-	url, err := m.runtime.ResumeDatabase(databaseId)
+	address, err := m.runtime.ResumeDatabase(databaseId)
 	if err != nil {
 		return "", err
 	}
 
 	database := m.databases[databaseId]
-	database.Resume(url)
-	return url, nil
+	database.Resume(address)
+	return address, nil
+}
+
+func (m *DBManager) reapIdleDatabases() {
+	for _, db := range m.databases {
+		if db.IsActiveAndIdle(m.idleLimit) {
+			err := m.PauseDatabase(db.Id())
+			if err != nil {
+				fmt.Printf("Error pausing idle database %s: %v\n", db.Id(), err)
+			}
+		}
+	}
+}
+
+func (m *DBManager) StartIdleDatabaseReaper() {
+	go func() {
+		ticker := time.NewTicker(m.ReaperTimeInterval)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			m.reapIdleDatabases()
+		}
+	}()
 }

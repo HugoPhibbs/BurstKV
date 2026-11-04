@@ -2,17 +2,11 @@ package local_db_runtime
 
 import (
 	"burstkv/internal/db_runtime"
-	"burstkv/internal/redis_db"
-	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os/exec"
-	"strings"
-
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/client"
 )
 
 const REDIS_IMAGE = "redis:8.10.3"
@@ -38,47 +32,9 @@ func NewLocalDBRuntime(minPort, maxPort int) *LocalDBRuntime {
 	}
 }
 
-// Formats a URL for a local Redis URL
-func (l *LocalDBRuntime) formatRedisURL(port int) string {
-	return fmt.Sprintf("redis://localhost:%d", port)
-}
-
-// Finds existing local databases and returns a list of them
-func (l *LocalDBRuntime) FindExistingDatabases() ([]*redis_db.RedisDB, error) {
-	docker_client, err := client.New(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-	defer docker_client.Close()
-
-	res, err := docker_client.ContainerList(context.Background(), client.ContainerListOptions{
-		All:     true,
-		Filters: make(client.Filters).Add("name", CONTAINER_PREFIX),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var dbs []*redis_db.RedisDB
-	for _, c := range res.Items {
-		name := strings.TrimPrefix(c.Names[0], "/")
-
-		id := strings.TrimPrefix(name, CONTAINER_PREFIX)
-
-		url := ""
-		if c.State == container.StateRunning {
-			for _, p := range c.Ports {
-				if p.PrivatePort == 6379 && p.PublicPort != 0 {
-					url = l.formatRedisURL(int(p.PublicPort))
-					break
-				}
-			}
-		}
-
-		dbs = append(dbs, redis_db.NewRedisDB(url, id))
-	}
-
-	return dbs, nil
+// Formats an address for a local Redis DB (no protocol prefix)
+func (l *LocalDBRuntime) formatAddress(port int) string {
+	return fmt.Sprintf("localhost:%d", port)
 }
 
 // The name of a database's data volume
@@ -91,7 +47,7 @@ func (l *LocalDBRuntime) databaseContainerName(databaseId string) string {
 	return fmt.Sprintf("%s%s", CONTAINER_PREFIX, databaseId)
 }
 
-// Creates a new local database with the given ID and returns its URL
+// Creates a new local database with the given ID and returns its address
 func (l *LocalDBRuntime) CreateDatabase(databaseId string) (string, error) {
 	new_port, err := l.acquirePort()
 	if err != nil {
@@ -100,9 +56,11 @@ func (l *LocalDBRuntime) CreateDatabase(databaseId string) (string, error) {
 
 	start_cmd := exec.Command("docker", "run", "-d",
 		"--name", l.databaseContainerName(databaseId),
-		"-p", fmt.Sprintf("%d:6379", new_port),
+		"-p", fmt.Sprintf("127.0.0.1:%d:6379", new_port),
 		"-v", fmt.Sprintf("%s:/data", l.databaseVolumeName(databaseId)),
 		REDIS_IMAGE,
+		// The database ID doubles as the password, so the AUTH the proxy forwards succeeds.
+		"redis-server", "--requirepass", databaseId,
 	)
 
 	if err := start_cmd.Run(); err != nil {
@@ -110,31 +68,35 @@ func (l *LocalDBRuntime) CreateDatabase(databaseId string) (string, error) {
 		return "", err
 	}
 
-	url := l.formatRedisURL(new_port)
+	address := l.formatAddress(new_port)
 
-	return url, nil
+	return address, nil
 }
 
 // Deletes a local database with the given ID
-func (l *LocalDBRuntime) DeleteDatabase(databaseId string) (bool, error) {
+func (l *LocalDBRuntime) DeleteDatabase(databaseId string) error {
 	remove_cmd := exec.Command("docker", "rm", "-f", l.databaseContainerName(databaseId))
 	if err := remove_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
 	remove_vols_cmd := exec.Command("docker", "volume", "rm", l.databaseVolumeName(databaseId))
 	if err := remove_vols_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // Pauses a local database with the given ID
-func (l *LocalDBRuntime) PauseDatabase(databaseId string) (bool, error) {
+func (l *LocalDBRuntime) PauseDatabase(databaseId string) error {
 	pause_cmd := exec.Command("docker", "stop", l.databaseContainerName(databaseId))
 	if err := pause_cmd.Run(); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	remove_cmd := exec.Command("docker", "rm", l.databaseContainerName(databaseId))
+	if err := remove_cmd.Run(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Resumes a local database with the given ID
@@ -153,7 +115,7 @@ func (l *LocalDBRuntime) acquirePort() (int, error) {
 		}
 	}
 	portOccupied := func(port int) bool {
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err != nil {
 			return true
 		}
