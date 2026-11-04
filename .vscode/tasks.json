@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "go: build",
+            "label": "go: build-worker",
             "type": "shell",
-            "command": "go build -o bin/burstkv.exe ./cmd/burstkv",
+            "command": "go build -o bin/worker.exe ./cmd/worker",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -12,10 +12,17 @@
             "problemMatcher": ["$go"]
         },
         {
-            "label": "go: run",
+            "label": "go: run-worker",
             "type": "shell",
-            "command": "./bin/burstkv.exe",
-            "dependsOn": "go: build",
+            "command": "./bin/worker.exe",
+            "dependsOn": ["protoc: generate", "go: build-worker"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "protoc: generate",
+            "type": "shell",
+            "command": "protoc --go_out=. --go_opt=module=burstkv --go-grpc_out=. --go-grpc_opt=module=burstkv proto/worker.proto",
             "problemMatcher": []
         },
         {
