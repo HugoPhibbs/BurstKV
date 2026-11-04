@@ -3,7 +3,9 @@ package utils
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"time"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -21,5 +23,39 @@ func WaitForRedis(ctx context.Context, rdb *redis.Client, timeout int) error {
 			return fmt.Errorf("redis not ready: %w", ctx.Err())
 		case <-time.After(100 * time.Millisecond):
 		}
+	}
+}
+
+// Generates a random string of length n from lower/uppercase letters and digits.
+func RandomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, n)
+	for i := range n {
+		result[i] = letters[rand.IntN(len(letters))]
+	}
+	return string(result)
+}
+
+type DBState int
+
+const (
+	Active DBState = iota
+	Paused
+	NotFound
+	Unknown
+)
+
+func (s DBState) String() string {
+	switch s {
+	case Active:
+		return "active"
+	case Paused:
+		return "paused"
+	case NotFound:
+		return "non-found"
+	case Unknown:
+		return "unknown"
+	default:
+		panic(fmt.Sprintf("invalid DBState: %d", s))
 	}
 }
