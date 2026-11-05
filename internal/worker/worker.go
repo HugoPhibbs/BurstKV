@@ -125,7 +125,6 @@ func (w *Worker) assignDatabase(databaseID string, createNew bool) error {
 		if releaseErr != nil {
 			return fmt.Errorf("starting database and releasing container: %v, %v", err, releaseErr)
 		}
-		w.containerPool <- container
 		return err
 	}
 
