@@ -277,9 +277,10 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x10DB_STATE_UNKNOWN\x10\x00\x12\x13\n" +
 	"\x0fDB_STATE_ACTIVE\x10\x01\x12\x13\n" +
 	"\x0fDB_STATE_PAUSED\x10\x02\x12\x16\n" +
-	"\x12DB_STATE_NOT_FOUND\x10\x032\xaf\x02\n" +
+	"\x12DB_STATE_NOT_FOUND\x10\x032\xe9\x02\n" +
 	"\x06Worker\x128\n" +
-	"\x0eAssignDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x127\n" +
+	"\x0eCreateDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x128\n" +
+	"\x0eResumeDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x127\n" +
 	"\rPauseDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x128\n" +
 	"\x0eDeleteDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x12G\n" +
 	"\rDatabaseState\x12\x17.worker.DatabaseRequest\x1a\x1d.worker.DatabaseStateResponse\x12/\n" +
@@ -308,18 +309,20 @@ var file_proto_worker_proto_goTypes = []any{
 }
 var file_proto_worker_proto_depIdxs = []int32{
 	0, // 0: worker.DatabaseStateResponse.state:type_name -> worker.DBState
-	2, // 1: worker.Worker.AssignDatabase:input_type -> worker.DatabaseRequest
-	2, // 2: worker.Worker.PauseDatabase:input_type -> worker.DatabaseRequest
-	2, // 3: worker.Worker.DeleteDatabase:input_type -> worker.DatabaseRequest
-	2, // 4: worker.Worker.DatabaseState:input_type -> worker.DatabaseRequest
-	1, // 5: worker.Worker.Status:input_type -> worker.Empty
-	1, // 6: worker.Worker.AssignDatabase:output_type -> worker.Empty
-	1, // 7: worker.Worker.PauseDatabase:output_type -> worker.Empty
-	1, // 8: worker.Worker.DeleteDatabase:output_type -> worker.Empty
-	3, // 9: worker.Worker.DatabaseState:output_type -> worker.DatabaseStateResponse
-	4, // 10: worker.Worker.Status:output_type -> worker.StatusResponse
-	6, // [6:11] is the sub-list for method output_type
-	1, // [1:6] is the sub-list for method input_type
+	2, // 1: worker.Worker.CreateDatabase:input_type -> worker.DatabaseRequest
+	2, // 2: worker.Worker.ResumeDatabase:input_type -> worker.DatabaseRequest
+	2, // 3: worker.Worker.PauseDatabase:input_type -> worker.DatabaseRequest
+	2, // 4: worker.Worker.DeleteDatabase:input_type -> worker.DatabaseRequest
+	2, // 5: worker.Worker.DatabaseState:input_type -> worker.DatabaseRequest
+	1, // 6: worker.Worker.Status:input_type -> worker.Empty
+	1, // 7: worker.Worker.CreateDatabase:output_type -> worker.Empty
+	1, // 8: worker.Worker.ResumeDatabase:output_type -> worker.Empty
+	1, // 9: worker.Worker.PauseDatabase:output_type -> worker.Empty
+	1, // 10: worker.Worker.DeleteDatabase:output_type -> worker.Empty
+	3, // 11: worker.Worker.DatabaseState:output_type -> worker.DatabaseStateResponse
+	4, // 12: worker.Worker.Status:output_type -> worker.StatusResponse
+	7, // [7:13] is the sub-list for method output_type
+	1, // [1:7] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name

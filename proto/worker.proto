@@ -6,10 +6,10 @@ option go_package = "burstkv/internal/workerpb";
 
 // Called by the central node to manage databases on a worker node.
 service Worker {
-  rpc AssignDatabase(DatabaseRequest) returns (Empty);
+  rpc CreateDatabase(DatabaseRequest) returns (Empty);
+  rpc ResumeDatabase(DatabaseRequest) returns (Empty);
   rpc PauseDatabase(DatabaseRequest) returns (Empty);
   rpc DeleteDatabase(DatabaseRequest) returns (Empty);
-  rpc DatabaseState(DatabaseRequest) returns (DatabaseStateResponse);
   rpc Status(Empty) returns (StatusResponse);
 }
 
@@ -17,17 +17,6 @@ message Empty {}
 
 message DatabaseRequest {
   string database_id = 1;
-}
-
-enum DBState {
-  DB_STATE_UNKNOWN = 0;
-  DB_STATE_ACTIVE = 1;
-  DB_STATE_PAUSED = 2;
-  DB_STATE_NOT_FOUND = 3;
-}
-
-message DatabaseStateResponse {
-  DBState state = 1;
 }
 
 message StatusResponse {

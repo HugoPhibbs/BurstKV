@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Worker_AssignDatabase_FullMethodName = "/worker.Worker/AssignDatabase"
+	Worker_CreateDatabase_FullMethodName = "/worker.Worker/CreateDatabase"
+	Worker_ResumeDatabase_FullMethodName = "/worker.Worker/ResumeDatabase"
 	Worker_PauseDatabase_FullMethodName  = "/worker.Worker/PauseDatabase"
 	Worker_DeleteDatabase_FullMethodName = "/worker.Worker/DeleteDatabase"
 	Worker_DatabaseState_FullMethodName  = "/worker.Worker/DatabaseState"
@@ -32,7 +33,8 @@ const (
 //
 // Called by the central node to manage databases on a worker node.
 type WorkerClient interface {
-	AssignDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
+	CreateDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
+	ResumeDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
 	PauseDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
 	DeleteDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
 	DatabaseState(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*DatabaseStateResponse, error)
@@ -47,10 +49,20 @@ func NewWorkerClient(cc grpc.ClientConnInterface) WorkerClient {
 	return &workerClient{cc}
 }
 
-func (c *workerClient) AssignDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *workerClient) CreateDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, Worker_AssignDatabase_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Worker_CreateDatabase_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) ResumeDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Worker_ResumeDatabase_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +115,8 @@ func (c *workerClient) Status(ctx context.Context, in *Empty, opts ...grpc.CallO
 //
 // Called by the central node to manage databases on a worker node.
 type WorkerServer interface {
-	AssignDatabase(context.Context, *DatabaseRequest) (*Empty, error)
+	CreateDatabase(context.Context, *DatabaseRequest) (*Empty, error)
+	ResumeDatabase(context.Context, *DatabaseRequest) (*Empty, error)
 	PauseDatabase(context.Context, *DatabaseRequest) (*Empty, error)
 	DeleteDatabase(context.Context, *DatabaseRequest) (*Empty, error)
 	DatabaseState(context.Context, *DatabaseRequest) (*DatabaseStateResponse, error)
@@ -118,8 +131,11 @@ type WorkerServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWorkerServer struct{}
 
-func (UnimplementedWorkerServer) AssignDatabase(context.Context, *DatabaseRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method AssignDatabase not implemented")
+func (UnimplementedWorkerServer) CreateDatabase(context.Context, *DatabaseRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDatabase not implemented")
+}
+func (UnimplementedWorkerServer) ResumeDatabase(context.Context, *DatabaseRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeDatabase not implemented")
 }
 func (UnimplementedWorkerServer) PauseDatabase(context.Context, *DatabaseRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method PauseDatabase not implemented")
@@ -154,20 +170,38 @@ func RegisterWorkerServer(s grpc.ServiceRegistrar, srv WorkerServer) {
 	s.RegisterService(&Worker_ServiceDesc, srv)
 }
 
-func _Worker_AssignDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Worker_CreateDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DatabaseRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServer).AssignDatabase(ctx, in)
+		return srv.(WorkerServer).CreateDatabase(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Worker_AssignDatabase_FullMethodName,
+		FullMethod: Worker_CreateDatabase_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).AssignDatabase(ctx, req.(*DatabaseRequest))
+		return srv.(WorkerServer).CreateDatabase(ctx, req.(*DatabaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Worker_ResumeDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DatabaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).ResumeDatabase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Worker_ResumeDatabase_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).ResumeDatabase(ctx, req.(*DatabaseRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -252,8 +286,12 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*WorkerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "AssignDatabase",
-			Handler:    _Worker_AssignDatabase_Handler,
+			MethodName: "CreateDatabase",
+			Handler:    _Worker_CreateDatabase_Handler,
+		},
+		{
+			MethodName: "ResumeDatabase",
+			Handler:    _Worker_ResumeDatabase_Handler,
 		},
 		{
 			MethodName: "PauseDatabase",
