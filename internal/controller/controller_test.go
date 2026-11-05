@@ -46,7 +46,7 @@ func newTestController(t *testing.T, idleLimit time.Duration, grpcPort, minPort,
 	t.Cleanup(func() { controlledWorker.RPCConnection.Close() })
 
 	c := NewController(idleLimit)
-	c.AddWorker(remoteWorker)
+	c.AddWorker(controlledWorker)
 	return c, remoteWorker
 }
 
