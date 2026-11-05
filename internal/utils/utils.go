@@ -35,27 +35,3 @@ func RandomString(n int) string {
 	}
 	return string(result)
 }
-
-type DBState int
-
-const (
-	Active DBState = iota
-	Paused
-	NotFound
-	Unknown
-)
-
-func (s DBState) String() string {
-	switch s {
-	case Active:
-		return "active"
-	case Paused:
-		return "paused"
-	case NotFound:
-		return "non-found"
-	case Unknown:
-		return "unknown"
-	default:
-		panic(fmt.Sprintf("invalid DBState: %d", s))
-	}
-}
