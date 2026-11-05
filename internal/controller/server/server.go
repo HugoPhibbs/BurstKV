@@ -2,7 +2,7 @@ package server
 
 import (
 	"burstkv/internal/controller"
-	"burstkv/internal/utils"
+	"burstkv/internal/controller/domain/database"
 	"errors"
 	"net/http"
 
@@ -26,7 +26,7 @@ func New(ctrl *controller.Controller) *gin.Engine {
 			writeError(c, err)
 			return
 		}
-		if state == utils.NotFound {
+		if state == database.NotFound {
 			writeError(c, controller.ErrDatabaseNotFound)
 			return
 		}

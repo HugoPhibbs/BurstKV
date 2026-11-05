@@ -2,15 +2,23 @@ package worker
 
 import (
 	"burstkv/internal/utils"
-	"errors"
+	"context"
 	"fmt"
+	"io"
 	"maps"
-	"os"
 	"os/exec"
 	"slices"
 )
 
-var redisImage = "redis:8.10.3"
+var REDIS_IMAGE = "redis:8.10.3"
+
+// Allows for mocking by interface
+type SnapshotStorage interface {
+	SaveSnapshot(ctx context.Context, databaseID string, tarStream io.Reader) error
+	LoadSnapshot(ctx context.Context, databaseID string, w io.Writer) error
+	SnapshotExists(ctx context.Context, databaseID string) (bool, error)
+	DeleteSnapshot(ctx context.Context, databaseID string) (bool, error)
+}
 
 type DatabaseContainer struct {
 	containerID string
@@ -18,17 +26,19 @@ type DatabaseContainer struct {
 }
 
 type Worker struct {
-	WorkerID     string
-	containerPool chan *DatabaseContainer       // Containers not assigned to a database
-	assigned      map[string]*DatabaseContainer // databaseID -> container
+	WorkerID        string
+	containerPool   chan *DatabaseContainer       // Containers not assigned to a database
+	assigned        map[string]*DatabaseContainer // databaseID -> container
+	snapshotStorage SnapshotStorage
 }
 
 // Creates a Worker and starts poolSize idle containers on ports minPort to minPort+poolSize-1.
-func NewWorker(workerID string, minPort int, poolSize int) (*Worker, error) {
+func NewWorker(workerID string, minPort int, poolSize int, snapshotStorage SnapshotStorage) (*Worker, error) {
 	wm := &Worker{
-		WorkerID:     workerID,
-		containerPool: make(chan *DatabaseContainer, poolSize),
-		assigned:      make(map[string]*DatabaseContainer),
+		WorkerID:        workerID,
+		containerPool:   make(chan *DatabaseContainer, poolSize),
+		assigned:        make(map[string]*DatabaseContainer),
+		snapshotStorage: snapshotStorage,
 	}
 
 	for port := minPort; port < minPort+poolSize; port++ {
@@ -82,7 +92,7 @@ func (w *Worker) createContainer(port int) (*DatabaseContainer, error) {
 	startCmd := exec.Command("docker", "run", "-d",
 		"--name", w.containerName(container.containerID),
 		"-p", fmt.Sprintf("127.0.0.1:%d:6379", port),
-		redisImage,
+		REDIS_IMAGE,
 		"sleep", "infinity", // Keep the container idle until a database is assigned
 	)
 	if err := startCmd.Run(); err != nil {
@@ -136,27 +146,60 @@ func (w *Worker) startDatabase(databaseID string, container *DatabaseContainer, 
 	name := w.containerName(container.containerID)
 
 	if !createNew {
-		localSnapshotPath := w.localSnapshotPath(databaseID)
-		containerSnapshotPath := w.containerSnapshotPath(container.containerID)
-
-		if _, err := os.Stat(localSnapshotPath); err == nil {
-			if err := exec.Command("docker", "cp", localSnapshotPath, containerSnapshotPath).Run(); err != nil {
-				releaseErr := w.releaseContainer(databaseID, container)
-				if releaseErr != nil {
-					return fmt.Errorf("copying snapshot and releasing container: %v, %v", err, releaseErr)
-				}
-				return err
-			}
-		} else {
+		snapshotExists, err := w.snapshotStorage.SnapshotExists(context.Background(), databaseID)
+		if err != nil {
+			return err
+		}
+		if !snapshotExists {
 			return ErrSnapshotNotFound
+		}
+
+		if err := w.loadSnapshot(context.Background(), databaseID, container.containerID); err != nil {
+			return err
 		}
 	}
 
 	return exec.Command("docker", "exec", "-d", name, "redis-server", "--requirepass", databaseID).Run()
 }
 
+func (w *Worker) loadSnapshot(ctx context.Context, databaseID string, containerID string) error {
+	cmd := exec.CommandContext(ctx, "docker", "cp", "-", w.containerName(containerID) + ":/data")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	if err := w.snapshotStorage.LoadSnapshot(ctx, databaseID, stdin); err != nil {
+		stdin.Close()
+		cmd.Process.Kill()
+		cmd.Wait()
+		return err
+	}
+	stdin.Close() // signals EOF so docker cp finishes
+	return cmd.Wait()
+}
+
+func (w *Worker) saveSnapshot(ctx context.Context, databaseID string, containerID string) error {
+	cmd := exec.CommandContext(ctx, "docker", "cp", w.containerSnapshotPath(containerID), "-")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	if err := w.snapshotStorage.SaveSnapshot(ctx, databaseID, stdout); err != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
+		return err
+	}
+	return cmd.Wait()
+}
+
 // Saves the database's snapshot locally and returns its container to the pool.
-func (w *Worker) PauseDatabase(databaseID string) error {
+func (w *Worker) PauseDatabase(ctx context.Context, databaseID string) error {
 	container, ok := w.assigned[databaseID]
 	if !ok {
 		return ErrDatabaseNotAssigned
@@ -166,7 +209,8 @@ func (w *Worker) PauseDatabase(databaseID string) error {
 	if err := exec.Command("docker", "exec", name, "redis-cli", "-a", databaseID, "SAVE").Run(); err != nil {
 		return err
 	}
-	if err := exec.Command("docker", "cp", name+":/data/dump.rdb", w.localSnapshotPath(databaseID)).Run(); err != nil {
+
+	if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
 		return err
 	}
 
@@ -174,16 +218,21 @@ func (w *Worker) PauseDatabase(databaseID string) error {
 }
 
 // Deletes the database's snapshot and, if it is running, returns its container to the pool.
-func (w *Worker) DeleteDatabase(databaseID string) error {
+func (w *Worker) DeleteDatabase(ctx context.Context, databaseID string) error {
 	if container, ok := w.assigned[databaseID]; ok {
 		if err := w.releaseContainer(databaseID, container); err != nil {
 			return err
 		}
 	}
 
-	if err := os.Remove(w.localSnapshotPath(databaseID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	deleted, err := w.snapshotStorage.DeleteSnapshot(ctx, databaseID)
+	if err != nil {
 		return err
+	} 
+	if !deleted {
+		println( fmt.Sprintf("Warning: snapshot for database %s not deleted", databaseID))
 	}
+
 	return nil
 }
 
@@ -217,10 +266,6 @@ func (w *Worker) formatAddress(port int) string {
 
 func (w *Worker) containerName(containerID string) string {
 	return fmt.Sprintf("burstkv-%s-%s", w.WorkerID, containerID)
-}
-
-func (w *Worker) localSnapshotPath(databaseID string) string {
-	return fmt.Sprintf("./snapshots/%s.rdb", databaseID)
 }
 
 func (w *Worker) containerSnapshotPath(containerID string) string {

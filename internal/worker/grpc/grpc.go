@@ -67,7 +67,7 @@ func (s *GRPCServer) PauseDatabase(ctx context.Context, req *pb.DatabaseRequest)
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	if err := s.wm.PauseDatabase(req.GetDatabaseId()); err != nil {
+	if err := s.wm.PauseDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.Empty{}, nil
@@ -79,7 +79,7 @@ func (s *GRPCServer) DeleteDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	if err := s.wm.DeleteDatabase(req.GetDatabaseId()); err != nil {
+	if err := s.wm.DeleteDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.Empty{}, nil

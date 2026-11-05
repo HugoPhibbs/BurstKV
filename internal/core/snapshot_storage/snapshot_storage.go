@@ -1,2 +1,102 @@
 package snapshot_storage
 
+import (
+	"archive/tar"
+	"context"
+	"fmt"
+	"io"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+)
+
+type SnapshotStorage struct {
+	storageURL string
+	bucketName  string
+	minioClient *minio.Client
+}
+
+func NewSnapshotStorage(storageURL string, bucketName string, minioCreds *credentials.Credentials, local bool) *SnapshotStorage {
+	minioClient, err := minio.New(storageURL, &minio.Options{
+		Creds: minioCreds,
+		Secure: !local,
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	return &SnapshotStorage{
+		storageURL: storageURL,
+		bucketName: bucketName,
+		minioClient: minioClient,
+	}
+}
+
+func (s *SnapshotStorage) snapshotObjectName(databaseId string) string {
+	return fmt.Sprintf("%s/dump.rdb", databaseId)
+}
+
+func (s *SnapshotStorage) LoadSnapshot(ctx context.Context, databaseId string, writer io.Writer) error {
+	objectName := s.snapshotObjectName(databaseId)
+	obj, err := s.minioClient.GetObject(ctx, s.bucketName, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return err
+	}
+
+	defer obj.Close()
+
+	info, err := obj.Stat()
+	if err != nil {
+		return err
+	}
+	tarWriter := tar.NewWriter(writer)
+	if err := tarWriter.WriteHeader(&tar.Header{
+		Name: "dump.rdb",
+		Size: info.Size,
+		Mode: 0644,
+	}); err != nil {
+		return err
+	}
+	
+	if _, err := io.Copy(tarWriter, obj); err != nil {
+		return err
+	}
+		
+	return tarWriter.Close()
+}
+
+func (s *SnapshotStorage) SaveSnapshot(ctx context.Context, databaseId string, tarStream io.Reader) error {
+	tarReader := tar.NewReader(tarStream)
+	header, err := tarReader.Next()
+	if err != nil {
+		return err
+	}
+	objectName := s.snapshotObjectName(databaseId)
+	_, err = s.minioClient.PutObject(ctx, s.bucketName, objectName, tarReader, header.Size, minio.PutObjectOptions{})
+	return err
+}
+
+func (s *SnapshotStorage) SnapshotExists(ctx context.Context, databaseId string) (bool, error) {
+	objectName := s.snapshotObjectName(databaseId)
+	_, err := s.minioClient.StatObject(ctx, s.bucketName, objectName, minio.StatObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == minio.NoSuchKey {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *SnapshotStorage) DeleteSnapshot(ctx context.Context, databaseId string) (bool, error) {
+	objectName := s.snapshotObjectName(databaseId)
+	err := s.minioClient.RemoveObject(ctx, s.bucketName, objectName, minio.RemoveObjectOptions{})
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == minio.NoSuchKey {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}

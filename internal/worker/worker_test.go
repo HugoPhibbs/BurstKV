@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"context"
 	"os"
 	"testing"
@@ -24,7 +25,7 @@ func TestMain(m *testing.M) {
 
 func newTestWorker(t *testing.T, minPort, poolSize int) *Worker {
 	t.Helper()
-	worker, err := NewWorker("test", minPort, poolSize)
+	worker, err := NewWorker("test", minPort, poolSize, &snapshot_storage_test.NoopSnapshotStorage{})
 	require.NoError(t, err)
 	t.Cleanup(worker.Close)
 	return worker
@@ -42,6 +43,8 @@ func redisConnect(t *testing.T, addr, databaseID string) *redis.Client {
 }
 
 func TestWorkerManager_CreateAndDeleteDatabase(t *testing.T) {
+	ctx := context.Background()
+
 	worker := newTestWorker(t, 31000, 1)
 	id := "assign-delete-test"
 
@@ -54,7 +57,7 @@ func TestWorkerManager_CreateAndDeleteDatabase(t *testing.T) {
 	assert.True(t, worker.IsAssigned(id), "database should be assigned after creation")
 	assert.Equal(t, 0, worker.AvailableContainerCount())
 
-	require.NoError(t, worker.DeleteDatabase(id))
+	require.NoError(t, worker.DeleteDatabase(ctx, id))
 	assert.False(t, worker.IsAssigned(id), "database should not be assigned after deletion")
 
 	assert.Equal(t, 1, worker.AvailableContainerCount())
@@ -71,7 +74,7 @@ func TestWorkerManager_PauseAndResumeDatabase(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, redisConnect(t, addr, id).Set(ctx, "key", "value", 0).Err())
 
-	require.NoError(t, worker.PauseDatabase(id))
+	require.NoError(t, worker.PauseDatabase(ctx, id))
 	assert.False(t, worker.IsAssigned(id), "database should not be assigned after pause")
 
 	err = worker.ResumeDatabase(id)
@@ -82,10 +85,11 @@ func TestWorkerManager_PauseAndResumeDatabase(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "value", val, "data should survive pause/resume")
 
-	require.NoError(t, worker.DeleteDatabase(id))
+	require.NoError(t, worker.DeleteDatabase(ctx, id))
 }
 
 func TestWorkerManager_NoAvailableContainers(t *testing.T) {
+	ctx := context.Background()
 	worker := newTestWorker(t, 31020, 1)
 
 	err := worker.CreateDatabase("first")
@@ -95,10 +99,12 @@ func TestWorkerManager_NoAvailableContainers(t *testing.T) {
 	err = worker.CreateDatabase("second")
 	assert.ErrorIs(t, err, ErrNoAvailableContainers)
 
-	require.NoError(t, worker.DeleteDatabase("first"))
+	require.NoError(t, worker.DeleteDatabase(ctx, "first"))
 }
 
 func TestWorkerManager_PauseUnassignedDatabase(t *testing.T) {
+	ctx := context.Background()
 	worker := newTestWorker(t, 31030, 1)
-	assert.ErrorIs(t, worker.PauseDatabase("missing"), ErrDatabaseNotAssigned)
+
+	assert.ErrorIs(t, worker.PauseDatabase(ctx, "missing"), ErrDatabaseNotAssigned)
 }

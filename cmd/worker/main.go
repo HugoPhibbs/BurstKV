@@ -2,6 +2,7 @@ package main
 
 import (
 	"burstkv/internal/core/redis_proxy"
+	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/worker"
 	"burstkv/internal/worker/grpc"
 	"context"
@@ -16,7 +17,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	worker, err := worker.NewWorker("worker-1", 30000, 10)
+	worker, err := worker.NewWorker("worker-1", 30000, 10, &snapshot_storage_test.NoopSnapshotStorage{})
 	if err != nil {
 		log.Fatal(err)
 	}

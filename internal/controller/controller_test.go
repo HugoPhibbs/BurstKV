@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/controller/domain/database"
-	"burstkv/internal/controller/domain/worker"
+	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
+	"burstkv/internal/worker"
 	workergrpc "burstkv/internal/worker/grpc"
 	"context"
 	"fmt"
@@ -31,24 +33,21 @@ func TestMain(m *testing.M) {
 // along with the worker itself so tests can look up database addresses.
 func newTestController(t *testing.T, idleLimit time.Duration, grpcPort, minPort, poolSize int) (*Controller, *worker.Worker) {
 	t.Helper()
-	w, err := worker.NewWorker("test", minPort, poolSize)
-	require.NoError(t, err)
-	t.Cleanup(w.Close)
-
 	grpcAddr := fmt.Sprintf("127.0.0.1:%d", grpcPort)
-	go workergrpc.New(w).ListenAndServe(grpcAddr)
-
-	remote, err := domain.NewWorker("test", grpcAddr, "")
+	
+	controlledWorker, err := controlled_worker.NewControlledWorker("test", grpcAddr, "none")
 	require.NoError(t, err)
-	t.Cleanup(func() { remote.RPCConnection.Close() })
-	require.Eventually(t, func() bool {
-		_, err := remote.Status()
-		return err == nil
-	}, 5*time.Second, 50*time.Millisecond, "worker gRPC server did not become ready")
+	
+	remoteWorker, err := worker.NewWorker("test", minPort, poolSize, &snapshot_storage_test.NoopSnapshotStorage{})
+	t.Cleanup(remoteWorker.Close)
+
+	go workergrpc.New(remoteWorker).ListenAndServe(grpcAddr)
+	require.NoError(t, err)
+	t.Cleanup(func() { controlledWorker.RPCConnection.Close() })
 
 	c := NewController(idleLimit)
-	c.AddWorker(remote)
-	return c, w
+	c.AddWorker(remoteWorker)
+	return c, remoteWorker
 }
 
 // Connects to a running database, waiting for Redis to start.
@@ -175,5 +174,5 @@ func TestController_TestIdleDatabaseReaping(t *testing.T) {
 	// Check if the database has been reaped
 	state, err := c.GetDatabaseState(id)
 	require.NoError(t, err)
-	assert.Equal(t, utils.Paused, state, "expected database state to be Paused after idle timeout")
+	assert.Equal(t, database.Paused, state, "expected database state to be Paused after idle timeout")
 }

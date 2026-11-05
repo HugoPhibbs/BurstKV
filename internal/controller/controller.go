@@ -2,7 +2,7 @@ package controller
 
 import (
 	"burstkv/internal/controller/domain/database"
-	"burstkv/internal/controller/domain/worker"
+	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/utils"
 	"fmt"
 	"maps"
@@ -16,7 +16,7 @@ const DEFAULT_REAPER_TIME_INTERVAL = 1 * time.Minute
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
-	workers            map[string]*worker.Worker   // workerID -> Worker
+	workers            map[string]*controlled_worker.ControlledWorker   // workerID -> Worker
 	databases          map[string]*database.Database // databaseID -> Database
 }
 
@@ -25,12 +25,12 @@ func NewController(idleLimit time.Duration) *Controller {
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: DEFAULT_REAPER_TIME_INTERVAL,
-		workers:            make(map[string]*worker.Worker),
+		workers:            make(map[string]*controlled_worker.ControlledWorker),
 		databases:          make(map[string]*database.Database),
 	}
 }
 
-func (c *Controller) AddWorker(worker *worker.Worker) {
+func (c *Controller) AddWorker(worker *controlled_worker.ControlledWorker) {
 	c.workers[worker.WorkerID] = worker
 
 	databaseIDs, err := worker.AssignedDatabases()
@@ -108,7 +108,7 @@ func (c *Controller) RecordDatabaseActivity(databaseId string) error {
 	return nil
 }
 
-func (c *Controller) workerForDatabase(databaseId string) *worker.Worker {
+func (c *Controller) workerForDatabase(databaseId string) *controlled_worker.ControlledWorker {
 	database, exists := c.databases[databaseId]
 	if !exists {
 		return nil
@@ -154,7 +154,7 @@ func (c *Controller) ResumeDatabase(databaseId string) error {
 	return nil
 }
 
-func (c *Controller) findAvailableWorker() *worker.Worker {
+func (c *Controller) findAvailableWorker() *controlled_worker.ControlledWorker {
 	for _, worker := range c.workers {
 		if worker.CanAssignDatabase() {
 			return worker

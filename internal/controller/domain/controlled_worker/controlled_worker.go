@@ -1,4 +1,4 @@
-package worker
+package controlled_worker
 
 import (
 	"burstkv/internal/workerpb"
@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type Worker struct {
+type ControlledWorker struct {
 	WorkerID      string
 	ProxyAddress  string
 	RPCAddress    string
@@ -16,52 +16,52 @@ type Worker struct {
 	client        workerpb.WorkerClient
 }
 
-func NewWorker(workerID string, grpcAddress string, proxyAddress string) (*Worker, error) {
+func NewControlledWorker(workerID string, grpcAddress string, proxyAddress string) (*ControlledWorker, error) {
 	conn, err := grpc.NewClient(grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	
+
 	if err != nil {
 		return nil, err
 	}
 
-	return &Worker{
-		WorkerID:     workerID,
-		ProxyAddress: proxyAddress,
-		RPCAddress:   grpcAddress,
+	return &ControlledWorker{
+		WorkerID:      workerID,
+		ProxyAddress:  proxyAddress,
+		RPCAddress:    grpcAddress,
 		RPCConnection: conn,
-		client:       workerpb.NewWorkerClient(conn),
+		client:        workerpb.NewWorkerClient(conn),
 	}, nil
 }
 
-func (w *Worker) DeleteDatabase(databaseID string) error {
+func (w *ControlledWorker) DeleteDatabase(databaseID string) error {
 	_, err := w.client.DeleteDatabase(context.Background(), &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *Worker) CreateDatabase(databaseID string) error {
+func (w *ControlledWorker) CreateDatabase(databaseID string) error {
 	_, err := w.client.CreateDatabase(context.Background(), &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *Worker) ResumeDatabase(databaseID string) error {
+func (w *ControlledWorker) ResumeDatabase(databaseID string) error {
 	_, err := w.client.ResumeDatabase(context.Background(), &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *Worker) PauseDatabase(databaseID string) error {
+func (w *ControlledWorker) PauseDatabase(databaseID string) error {
 	_, err := w.client.PauseDatabase(context.Background(), &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *Worker) Status() (*workerpb.StatusResponse, error) {
+func (w *ControlledWorker) Status() (*workerpb.StatusResponse, error) {
 	resp, err := w.client.Status(context.Background(), &workerpb.Empty{})
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func (w *Worker) Status() (*workerpb.StatusResponse, error) {
 	return resp, nil
 }
 
-func (w *Worker) CanAssignDatabase() bool {
+func (w *ControlledWorker) CanAssignDatabase() bool {
 	status, err := w.Status()
 	if err != nil {
 		return false
@@ -77,7 +77,7 @@ func (w *Worker) CanAssignDatabase() bool {
 	return status.CanAssign
 }
 
-func (w *Worker) AssignedDatabases() ([]string, error) {
+func (w *ControlledWorker) AssignedDatabases() ([]string, error) {
 	status, err := w.Status()
 	if err != nil {
 		return nil, err
