@@ -1,5 +1,4 @@
-package db_manager
-//go:build ignore
+package controller
 
 import (
 	"errors"
@@ -16,3 +15,6 @@ var ErrDatabaseAlreadyPaused = errors.New("database is already paused")
 
 // A database is already active
 var ErrDatabaseAlreadyActive = errors.New("database is already active")
+
+// No available workers to assign a database
+var ErrNoAvailableWorkers = errors.New("no available workers to assign database")

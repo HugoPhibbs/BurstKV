@@ -2,7 +2,7 @@ package redis_proxy
 
 import (
 	"burstkv/internal/utils"
-	"burstkv/internal/worker_node/worker_manager"
+	"burstkv/internal/worker"
 	"os"
 	"testing"
 
@@ -22,15 +22,15 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func newTestWorkerManager(t *testing.T, minPort, poolSize int) *worker_manager.WorkerManager {
+func newTestWorkerManager(t *testing.T, minPort, poolSize int) *worker.Worker {
 	t.Helper()
-	wm, err := worker_manager.NewWorkerManager("proxy-test", minPort, poolSize)
+	wm, err := worker.NewWorker("proxy-test", minPort, poolSize)
 	require.NoError(t, err)
 	t.Cleanup(wm.Close)
 	return wm
 }
 
-func startProxy(wm *worker_manager.WorkerManager, proxyAddr string) {
+func startProxy(wm *worker.Worker, proxyAddr string) {
 	go NewRedisProxy(proxyAddr, wm).ListenAndServe()
 }
 
@@ -39,8 +39,8 @@ func TestRedisProxy_WorkerManager_TestSetAndGet(t *testing.T) {
 	wm := newTestWorkerManager(t, 31100, 1)
 
 	const databaseId = "proxy-set-get"
-	_, err := wm.AssignDatabase(databaseId)
-	require.NoError(t, err, "failed to assign database")
+	err := wm.CreateDatabase(databaseId)
+	require.NoError(t, err, "failed to create database")
 	defer wm.DeleteDatabase(databaseId)
 
 	const proxyAddr = "127.0.0.1:6400"
@@ -71,9 +71,11 @@ func TestRedisProxy_WorkerManager_TestDynamicRouting(t *testing.T) {
 	databaseIds := []string{"routing-a", "routing-b", "routing-c"}
 	directAddrs := map[string]string{}
 	for _, id := range databaseIds {
-		addr, err := wm.AssignDatabase(id)
-		require.NoError(t, err, "failed to assign database %s", id)
+		err := wm.CreateDatabase(id)
+		require.NoError(t, err, "failed to create database %s", id)
 		defer wm.DeleteDatabase(id)
+		addr, err := wm.DatabaseAddress(id)
+		require.NoError(t, err, "failed to get database address %s", id)
 		directAddrs[id] = addr
 	}
 
@@ -113,8 +115,8 @@ func TestRedisProxy_WorkerManager_TestNoAuth(t *testing.T) {
 	wm := newTestWorkerManager(t, 31120, 1)
 
 	const databaseId = "proxy-no-auth"
-	_, err := wm.AssignDatabase(databaseId)
-	require.NoError(t, err, "failed to assign database")
+	err := wm.CreateDatabase(databaseId)
+	require.NoError(t, err, "failed to create database")
 	defer wm.DeleteDatabase(databaseId)
 
 	const proxyAddr = "127.0.0.1:6420"
@@ -131,8 +133,8 @@ func TestRedisProxy_WorkerManager_TestResumesPausedDatabase(t *testing.T) {
 	wm := newTestWorkerManager(t, 31140, 1)
 
 	const databaseId = "proxy-resume"
-	_, err := wm.AssignDatabase(databaseId)
-	require.NoError(t, err, "failed to assign database")
+	err := wm.CreateDatabase(databaseId)
+	require.NoError(t, err, "failed to create database")
 	defer wm.DeleteDatabase(databaseId)
 
 	const proxyAddr = "127.0.0.1:6440"

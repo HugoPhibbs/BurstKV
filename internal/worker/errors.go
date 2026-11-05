@@ -1,8 +1,10 @@
-package worker_node
+package worker
 
 import (
 	"errors"
 )
+
+var ErrSnapshotNotFound = errors.New("database snapshot not found")
 
 // No idle containers left in the pool
 var ErrNoAvailableContainers = errors.New("no available containers in the pool")
