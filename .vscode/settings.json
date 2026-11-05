@@ -1,7 +1,0 @@
-{
-    "gopls": {
-        "build.directoryFilters": [
-            "-internal/central_node",
-        ]
-    }
-}
