@@ -34,10 +34,10 @@ func NewController(idleLimit time.Duration, snapshotStorage *snapshot_storage.Sn
 	}
 }
 
-func (c *Controller) AddWorker(worker *controlled_worker.ControlledWorker) {
+func (c *Controller) AddWorker(ctx context.Context, worker *controlled_worker.ControlledWorker) {
 	c.workers[worker.WorkerID] = worker
 
-	databaseIDs, err := worker.AssignedDatabases()
+	databaseIDs, err := worker.AssignedDatabases(ctx)
 	if err != nil {
 		fmt.Printf("Error getting assigned databases from worker %s: %v\n", worker.WorkerID, err)
 		return
@@ -68,11 +68,11 @@ func (c *Controller) GetAllDatabaseIDs() []string {
 }
 
 // Creates a new database and returns the new database ID
-func (c *Controller) CreateDatabase() (string, error) {
+func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
 	for workerID, worker := range c.workers {
-		if worker.CanAssignDatabase() {
+		if worker.CanAssignDatabase(ctx) {
 			new_database_id := utils.RandomString(DB_ID_LENGTH)
-			err := worker.CreateDatabase(new_database_id)
+			err := worker.CreateDatabase(ctx, new_database_id)
 			if err != nil {
 				return "", err
 			}
@@ -94,7 +94,7 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseId string) erro
 			if !ok {
 				panic("Invalid state: Database is assigned to a worker, yet the worker doesn't contain the database")
 			}
-			err := worker.DeleteDatabase(databaseId)
+			err := worker.DeleteDatabase(ctx, databaseId)
 			if err != nil {
 				return err
 			}
@@ -138,7 +138,7 @@ func (c *Controller) workerForDatabase(databaseId string) *controlled_worker.Con
 
 // Pauses the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyPaused if the database is already paused.
-func (c *Controller) PauseDatabase(databaseId string) error {
+func (c *Controller) PauseDatabase(ctx context.Context, databaseId string) error {
 	database, exists := c.databases[databaseId]
 	if !exists {
 		return ErrDatabaseNotFound
@@ -146,7 +146,7 @@ func (c *Controller) PauseDatabase(databaseId string) error {
 	if !database.IsRunning() {
 		return ErrDatabaseAlreadyPaused
 	}
-	if err := c.workers[database.WorkerID()].PauseDatabase(databaseId); err != nil {
+	if err := c.workers[database.WorkerID()].PauseDatabase(ctx, databaseId); err != nil {
 		return err
 	}
 	database.RemoveWorker()
@@ -155,7 +155,7 @@ func (c *Controller) PauseDatabase(databaseId string) error {
 
 // Resumes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyActive if the database is already active.
-func (c *Controller) ResumeDatabase(databaseId string) error {
+func (c *Controller) ResumeDatabase(ctx context.Context, databaseId string) error {
 	database, exists := c.databases[databaseId]
 	if !exists {
 		return ErrDatabaseNotFound
@@ -165,11 +165,11 @@ func (c *Controller) ResumeDatabase(databaseId string) error {
 		return ErrDatabaseAlreadyActive
 	}
 
-	worker := c.findAvailableWorker()
+	worker := c.findAvailableWorker(ctx)
 	if worker == nil {
 		return ErrNoAvailableWorkers
 	}
-	err := worker.ResumeDatabase(databaseId)
+	err := worker.ResumeDatabase(ctx, databaseId)
 	if err != nil {
 		return err
 	}
@@ -177,19 +177,19 @@ func (c *Controller) ResumeDatabase(databaseId string) error {
 	return nil
 }
 
-func (c *Controller) findAvailableWorker() *controlled_worker.ControlledWorker {
+func (c *Controller) findAvailableWorker(ctx context.Context) *controlled_worker.ControlledWorker {
 	for _, worker := range c.workers {
-		if worker.CanAssignDatabase() {
+		if worker.CanAssignDatabase(ctx) {
 			return worker
 		}
 	}
 	return nil
 }
 
-func (c *Controller) reapIdleDatabases() {
+func (c *Controller) reapIdleDatabases(ctx context.Context) {
 	for _, db := range c.databases {
 		if db.IsActiveAndIdle(c.idleLimit) {
-			err := c.PauseDatabase(db.Id())
+			err := c.PauseDatabase(ctx, db.Id())
 			if err != nil {
 				fmt.Printf("Error pausing idle database %s: %v\n", db.Id(), err)
 			}
@@ -197,13 +197,13 @@ func (c *Controller) reapIdleDatabases() {
 	}
 }
 
-func (c *Controller) StartIdleDatabaseReaper() {
+func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(c.ReaperTimeInterval)
 		defer ticker.Stop()
 
 		for range ticker.C {
-			c.reapIdleDatabases()
+			c.reapIdleDatabases(ctx)
 		}
 	}()
 }

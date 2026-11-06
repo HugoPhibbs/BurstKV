@@ -33,52 +33,57 @@ func NewControlledWorker(workerID string, grpcAddress string, proxyAddress strin
 	}, nil
 }
 
-func (w *ControlledWorker) DeleteDatabase(databaseID string) error {
-	_, err := w.client.DeleteDatabase(context.Background(), &workerpb.DatabaseRequest{
+func (w *ControlledWorker) DeleteDatabase(ctx context.Context ,databaseID string) error {
+	_, err := w.client.DeleteDatabase(ctx, &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *ControlledWorker) CreateDatabase(databaseID string) error {
+func (w *ControlledWorker) CreateDatabase(ctx context.Context, databaseID string) error {
 	_, err := w.client.CreateDatabase(context.Background(), &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *ControlledWorker) ResumeDatabase(databaseID string) error {
-	_, err := w.client.ResumeDatabase(context.Background(), &workerpb.DatabaseRequest{
+func (w *ControlledWorker) ResumeDatabase(ctx context.Context, databaseID string) error {
+	_, err := w.client.ResumeDatabase(ctx, &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *ControlledWorker) PauseDatabase(databaseID string) error {
-	_, err := w.client.PauseDatabase(context.Background(), &workerpb.DatabaseRequest{
+func (w *ControlledWorker) PauseDatabase(ctx context.Context, databaseID string) error {
+	_, err := w.client.PauseDatabase(ctx, &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err
 }
 
-func (w *ControlledWorker) Status() (*workerpb.StatusResponse, error) {
-	resp, err := w.client.Status(context.Background(), &workerpb.Empty{})
+func (w *ControlledWorker) WaitUntilRPCIsReady(ctx context.Context) error {
+	_, err := w.client.Status(ctx, &workerpb.Empty{}, grpc.WaitForReady(true))
+	return err
+}
+
+func (w *ControlledWorker) Status(ctx context.Context) (*workerpb.StatusResponse, error) {
+	resp, err := w.client.Status(ctx, &workerpb.Empty{})
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-func (w *ControlledWorker) CanAssignDatabase() bool {
-	status, err := w.Status()
+func (w *ControlledWorker) CanAssignDatabase(ctx context.Context) bool {
+	status, err := w.Status(ctx)
 	if err != nil {
 		return false
 	}
 	return status.CanAssign
 }
 
-func (w *ControlledWorker) AssignedDatabases() ([]string, error) {
-	status, err := w.Status()
+func (w *ControlledWorker) AssignedDatabases(ctx context.Context) ([]string, error) {
+	status, err := w.Status(ctx)
 	if err != nil {
 		return nil, err
 	}

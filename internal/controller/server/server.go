@@ -34,7 +34,7 @@ func New(ctrl *controller.Controller) *gin.Engine {
 	})
 
 	router.POST("/database", func(c *gin.Context) {
-		databaseId, err := ctrl.CreateDatabase()
+		databaseId, err := ctrl.CreateDatabase(c.Request.Context())
 		if err != nil {
 			writeError(c, err)
 			return
@@ -47,11 +47,11 @@ func New(ctrl *controller.Controller) *gin.Engine {
 	})
 
 	router.POST("/database/pause/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.PauseDatabase(c.Param("databaseId")))
+		writeResult(c, ctrl.PauseDatabase(c.Request.Context(), c.Param("databaseId")))
 	})
 
 	router.POST("/database/resume/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.ResumeDatabase(c.Param("databaseId")))
+		writeResult(c, ctrl.ResumeDatabase(c.Request.Context(), c.Param("databaseId")))
 	})
 
 	return router
