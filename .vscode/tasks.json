@@ -36,6 +36,12 @@
             "type": "shell",
             "command": "python scripts/start_dev_snapshot_server.py",
             "problemMatcher": []
+        }, 
+        {
+            "label": "tests (all)", 
+            "type": "shell",
+            "command": "go test ./... -v",
+            "problemMatcher": []
         }
     ]
 }
