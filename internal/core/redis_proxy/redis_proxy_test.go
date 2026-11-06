@@ -27,7 +27,7 @@ func startProxy(wm *worker.Worker, proxyAddr string) {
 	go NewRedisProxy(proxyAddr, wm).ListenAndServe()
 }
 
-func TestRedisProxy_WorkerManager_TestSetAndGet(t *testing.T) {
+func TestRedisProxy_TestSetAndGet(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31100, 1)
 
@@ -58,7 +58,7 @@ func NewMockWorker(t *testing.T, i1, i2 int) any {
 	panic("unimplemented")
 }
 
-func TestRedisProxy_WorkerManager_TestDynamicRouting(t *testing.T) {
+func TestRedisProxy_TestDynamicRouting(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31130, 5)
 
@@ -107,7 +107,7 @@ func TestRedisProxy_WorkerManager_TestDynamicRouting(t *testing.T) {
 	assert.Equal(t, 2, mockWorker.AvailableContainerCount(), "expected 2 of 5 containers left unassigned")
 }
 
-func TestRedisProxy_WorkerManager_TestNoAuth(t *testing.T) {
+func TestRedisProxy_TestNoAuth(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31120, 1)
 
@@ -125,7 +125,7 @@ func TestRedisProxy_WorkerManager_TestNoAuth(t *testing.T) {
 	assert.Error(t, utils.WaitForRedis(ctx, rdb, 2), "expected connection without a database ID to fail")
 }
 
-func TestRedisProxy_WorkerManager_TestResumesPausedDatabase(t *testing.T) {
+func TestRedisProxy_TestResumesPausedDatabase(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31140, 1)
 
@@ -141,8 +141,13 @@ func TestRedisProxy_WorkerManager_TestResumesPausedDatabase(t *testing.T) {
 	defer rdb.Close()
 	require.NoError(t, utils.WaitForRedis(ctx, rdb, 10))
 	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
-
+	
+	// Now pause the database
 	require.NoError(t, mockWorker.PauseDatabase(ctx, databaseId), "failed to pause database")
+	require.Error(t, utils.WaitForRedis(ctx, rdb, 2)) // Should not reconnect
+	
+	// Now resume the database again
+	require.NoError(t, mockWorker.ResumeDatabase(databaseId))
 
 	// A new connection to the paused database should resume it with its data intact
 	resumed := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseId})
