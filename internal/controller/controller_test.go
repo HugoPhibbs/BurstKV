@@ -3,10 +3,10 @@ package controller
 import (
 	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/controller/domain/database"
-	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
 	"burstkv/internal/worker"
 	workergrpc "burstkv/internal/worker/grpc"
+	"burstkv/internal/worker/worker_test"
 	"context"
 	"fmt"
 	"os"
@@ -34,18 +34,22 @@ func TestMain(m *testing.M) {
 func newTestController(t *testing.T, idleLimit time.Duration, grpcPort, minPort, poolSize int) (*Controller, *worker.Worker) {
 	t.Helper()
 	grpcAddr := fmt.Sprintf("127.0.0.1:%d", grpcPort)
-	
+
 	controlledWorker, err := controlled_worker.NewControlledWorker("test", grpcAddr, "none")
 	require.NoError(t, err)
-	
-	remoteWorker, err := worker.NewWorker("test", minPort, poolSize, &snapshot_storage_test.NoopSnapshotStorage{})
-	t.Cleanup(remoteWorker.Close)
+
+	remoteWorker, snapshotStorage := worker_test.NewMockWorker(t, minPort, poolSize)
+	t.Cleanup(func() {
+		if _, err := remoteWorker.StopAllContainers(); err != nil {
+			t.Errorf("stopping containers: %v", err)
+		}
+	})
 
 	go workergrpc.New(remoteWorker).ListenAndServe(grpcAddr)
 	require.NoError(t, err)
 	t.Cleanup(func() { controlledWorker.RPCConnection.Close() })
 
-	c := NewController(idleLimit)
+	c := NewController(idleLimit, snapshotStorage)
 	c.AddWorker(controlledWorker)
 	return c, remoteWorker
 }
@@ -64,7 +68,7 @@ func redisConnect(t *testing.T, w *worker.Worker, databaseID string) *redis.Clie
 func TestController_TestPauseAndResumeDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, w := newTestController(t, 300*time.Second, 33000, 32000, 1)
-	defer c.DeleteAllDatabases()
+	defer c.DeleteAllDatabases(ctx)
 
 	id, err := c.CreateDatabase()
 	require.NoError(t, err, "failed to create database")
@@ -86,7 +90,7 @@ func TestController_TestPauseAndResumeDatabase(t *testing.T) {
 func TestController_TestDeleteDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, w := newTestController(t, 300*time.Second, 33001, 32010, 1)
-	defer c.DeleteAllDatabases()
+	defer c.DeleteAllDatabases(ctx)
 
 	id, err := c.CreateDatabase()
 	require.NoError(t, err, "failed to create database")
@@ -94,14 +98,14 @@ func TestController_TestDeleteDatabase(t *testing.T) {
 	rdb := redisConnect(t, w, id)
 	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
 
-	require.NoError(t, c.DeleteDatabase(id), "failed to delete database")
+	require.NoError(t, c.DeleteDatabase(ctx, id), "failed to delete database")
 	assert.Error(t, rdb.Ping(ctx).Err(), "expected error when pinging deleted database")
 }
 
 func TestController_TestCreateDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, w := newTestController(t, 300*time.Second, 33002, 32020, 1)
-	defer c.DeleteAllDatabases()
+	defer c.DeleteAllDatabases(ctx)
 
 	id, err := c.CreateDatabase()
 	require.NoError(t, err, "failed to create database")
@@ -115,8 +119,9 @@ func TestController_TestCreateDatabase(t *testing.T) {
 }
 
 func TestController_TestGetAllDatabaseIDs(t *testing.T) {
+	ctx := t.Context()
 	c, _ := newTestController(t, 300*time.Second, 33003, 32030, 2)
-	defer c.DeleteAllDatabases()
+	defer c.DeleteAllDatabases(ctx)
 
 	id1, err := c.CreateDatabase()
 	require.NoError(t, err, "failed to create database 1")
@@ -131,8 +136,9 @@ func TestController_TestGetAllDatabaseIDs(t *testing.T) {
 }
 
 func TestController_TestGetDatabaseState(t *testing.T) {
+	ctx := t.Context()
 	c, _ := newTestController(t, 300*time.Second, 33004, 32040, 1)
-	defer c.DeleteAllDatabases()
+	defer c.DeleteAllDatabases(ctx)
 
 	id, err := c.CreateDatabase()
 	require.NoError(t, err, "failed to create database")
@@ -151,18 +157,19 @@ func TestController_TestGetDatabaseState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, database.Running, state, "expected database state to be Active after resuming")
 
-	require.NoError(t, c.DeleteDatabase(id), "failed to delete database")
+	require.NoError(t, c.DeleteDatabase(ctx, id), "failed to delete database")
 	state, err = c.GetDatabaseState(id)
 	require.NoError(t, err)
 	assert.Equal(t, database.NotFound, state, "expected database state to be NotFound after deletion")
 }
 
 func TestController_TestIdleDatabaseReaping(t *testing.T) {
+	ctx := t.Context()
 	timeout := 1 * time.Second
 	c, _ := newTestController(t, timeout, 33005, 32050, 1) // Set idle timeout to 1 second for testing
 	c.ReaperTimeInterval = 500 * time.Millisecond
 	c.StartIdleDatabaseReaper()
-	defer c.DeleteAllDatabases()
+	defer c.DeleteAllDatabases(ctx)
 
 	id, err := c.CreateDatabase()
 	require.NoError(t, err, "failed to create database")

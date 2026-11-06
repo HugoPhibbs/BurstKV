@@ -1,9 +1,9 @@
 package redis_proxy
 
 import (
-	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
 	"burstkv/internal/worker"
+	"burstkv/internal/worker/worker_test"
 	"os"
 	"testing"
 
@@ -23,29 +23,21 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func newTestWorker(t *testing.T, minPort, poolSize int) *worker.Worker {
-	t.Helper()
-	wm, err := worker.NewWorker("proxy-test", minPort, poolSize, &snapshot_storage_test.NoopSnapshotStorage{})
-	require.NoError(t, err)
-	t.Cleanup(wm.Close)
-	return wm
-}
-
 func startProxy(wm *worker.Worker, proxyAddr string) {
 	go NewRedisProxy(proxyAddr, wm).ListenAndServe()
 }
 
 func TestRedisProxy_WorkerManager_TestSetAndGet(t *testing.T) {
 	ctx := t.Context()
-	wm := newTestWorker(t, 31100, 1)
+	mockWorker, _ := worker_test.NewMockWorker(t, 31100, 1)
 
 	const databaseId = "proxy-set-get"
-	err := wm.CreateDatabase(databaseId)
+	err := mockWorker.CreateDatabase(databaseId)
 	require.NoError(t, err, "failed to create database")
-	defer wm.DeleteDatabase(ctx ,databaseId)
+	defer mockWorker.DeleteDatabase(ctx, databaseId)
 
 	const proxyAddr = "127.0.0.1:6400"
-	startProxy(wm, proxyAddr)
+	startProxy(mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     proxyAddr,
@@ -62,20 +54,24 @@ func TestRedisProxy_WorkerManager_TestSetAndGet(t *testing.T) {
 	assert.Equal(t, "test_value", val)
 }
 
+func NewMockWorker(t *testing.T, i1, i2 int) any {
+	panic("unimplemented")
+}
+
 func TestRedisProxy_WorkerManager_TestDynamicRouting(t *testing.T) {
 	ctx := t.Context()
-	wm := newTestWorker(t, 31130, 5)
+	mockWorker, _ := worker_test.NewMockWorker(t, 31130, 5)
 
 	const proxyAddr = "127.0.0.1:6430"
-	startProxy(wm, proxyAddr)
+	startProxy(mockWorker, proxyAddr)
 
 	databaseIds := []string{"routing-a", "routing-b", "routing-c"}
 	directAddrs := map[string]string{}
 	for _, id := range databaseIds {
-		err := wm.CreateDatabase(id)
+		err := mockWorker.CreateDatabase(id)
 		require.NoError(t, err, "failed to create database %s", id)
-		defer wm.DeleteDatabase(ctx ,id)
-		addr, err := wm.DatabaseAddress(id)
+		defer mockWorker.DeleteDatabase(ctx, id)
+		addr, err := mockWorker.DatabaseAddress(id)
 		require.NoError(t, err, "failed to get database address %s", id)
 		directAddrs[id] = addr
 	}
@@ -108,20 +104,20 @@ func TestRedisProxy_WorkerManager_TestDynamicRouting(t *testing.T) {
 		assert.Equal(t, int64(1), size, "container for %s should only hold its own key", id)
 	}
 
-	assert.Equal(t, 2, wm.AvailableContainerCount(), "expected 2 of 5 containers left unassigned")
+	assert.Equal(t, 2, mockWorker.AvailableContainerCount(), "expected 2 of 5 containers left unassigned")
 }
 
 func TestRedisProxy_WorkerManager_TestNoAuth(t *testing.T) {
 	ctx := t.Context()
-	wm := newTestWorker(t, 31120, 1)
+	mockWorker, _ := worker_test.NewMockWorker(t, 31120, 1)
 
 	const databaseId = "proxy-no-auth"
-	err := wm.CreateDatabase(databaseId)
+	err := mockWorker.CreateDatabase(databaseId)
 	require.NoError(t, err, "failed to create database")
-	defer wm.DeleteDatabase(ctx ,databaseId)
+	defer mockWorker.DeleteDatabase(ctx, databaseId)
 
 	const proxyAddr = "127.0.0.1:6420"
-	startProxy(wm, proxyAddr)
+	startProxy(mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{Addr: proxyAddr})
 	defer rdb.Close()
@@ -131,22 +127,22 @@ func TestRedisProxy_WorkerManager_TestNoAuth(t *testing.T) {
 
 func TestRedisProxy_WorkerManager_TestResumesPausedDatabase(t *testing.T) {
 	ctx := t.Context()
-	wm := newTestWorker(t, 31140, 1)
+	mockWorker, _ := worker_test.NewMockWorker(t, 31140, 1)
 
 	const databaseId = "proxy-resume"
-	err := wm.CreateDatabase(databaseId)
+	err := mockWorker.CreateDatabase(databaseId)
 	require.NoError(t, err, "failed to create database")
-	defer wm.DeleteDatabase(ctx ,databaseId)
+	defer mockWorker.DeleteDatabase(ctx, databaseId)
 
 	const proxyAddr = "127.0.0.1:6440"
-	startProxy(wm, proxyAddr)
+	startProxy(mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseId})
 	defer rdb.Close()
 	require.NoError(t, utils.WaitForRedis(ctx, rdb, 10))
 	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
 
-	require.NoError(t, wm.PauseDatabase(ctx, databaseId), "failed to pause database")
+	require.NoError(t, mockWorker.PauseDatabase(ctx, databaseId), "failed to pause database")
 
 	// A new connection to the paused database should resume it with its data intact
 	resumed := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseId})
@@ -156,5 +152,5 @@ func TestRedisProxy_WorkerManager_TestResumesPausedDatabase(t *testing.T) {
 	val, err := resumed.Get(ctx, "test_key").Result()
 	require.NoError(t, err)
 	assert.Equal(t, "test_value", val)
-	assert.Contains(t, wm.AssignedDatabases(), databaseId)
+	assert.Contains(t, mockWorker.AssignedDatabases(), databaseId)
 }
