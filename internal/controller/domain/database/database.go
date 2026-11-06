@@ -6,9 +6,9 @@ import (
 )
 
 type Database struct {
-	id           string
+	id             string
 	latestActivity atomic.Int64 // thread-safe
-	workerID     string
+	workerID       string
 }
 
 func NewDatabase(id string, workerID string) *Database {
@@ -58,6 +58,6 @@ func (db *Database) WorkerID() string {
 	return db.workerID
 }
 
-func (db *Database) IsActive() bool {
+func (db *Database) IsRunning() bool {
 	return db.workerID != ""
 }
