@@ -17,11 +17,11 @@ import (
 type GRPCServer struct {
 	pb.UnimplementedWorkerServer
 	mu sync.Mutex // WorkerManager is not safe for concurrent use
-	wm *worker.Worker
+	worker *worker.Worker
 }
 
-func New(wm *worker.Worker) *GRPCServer {
-	return &GRPCServer{wm: wm}
+func New(worker *worker.Worker) *GRPCServer {
+	return &GRPCServer{worker: worker}
 }
 
 func (s *GRPCServer) ListenAndServe(addr string) error {
@@ -41,7 +41,7 @@ func (s *GRPCServer) CreateDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	err := s.wm.CreateDatabase(req.GetDatabaseId())
+	err := s.worker.CreateDatabase(req.GetDatabaseId())
 	if err != nil {
 		return nil,toStatus(err)
 	}
@@ -54,7 +54,7 @@ func (s *GRPCServer) ResumeDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	err := s.wm.ResumeDatabase(req.GetDatabaseId())
+	err := s.worker.ResumeDatabase(req.GetDatabaseId())
 	if err != nil {
 		return nil,toStatus(err)
 	}
@@ -67,7 +67,7 @@ func (s *GRPCServer) PauseDatabase(ctx context.Context, req *pb.DatabaseRequest)
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	if err := s.wm.PauseDatabase(ctx, req.GetDatabaseId()); err != nil {
+	if err := s.worker.PauseDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.Empty{}, nil
@@ -79,7 +79,7 @@ func (s *GRPCServer) DeleteDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	if err := s.wm.DeleteDatabase(ctx, req.GetDatabaseId()); err != nil {
+	if err := s.worker.DeleteDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.Empty{}, nil
@@ -89,9 +89,9 @@ func (s *GRPCServer) Status(ctx context.Context, _ *pb.Empty) (*pb.StatusRespons
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return &pb.StatusResponse{
-		CanAssign:           s.wm.CanAssignDatabase(),
-		AssignedDatabases:   s.wm.AssignedDatabases(),
-		AvailableContainers: int32(s.wm.AvailableContainerCount()),
+		CanAssign:           s.worker.CanAssignDatabase(),
+		AssignedDatabases:   s.worker.AssignedDatabases(),
+		AvailableContainers: int32(s.worker.AvailableContainerCount()),
 	}, nil
 }
 

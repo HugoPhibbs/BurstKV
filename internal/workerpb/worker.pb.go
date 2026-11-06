@@ -21,58 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type DBState int32
-
-const (
-	DBState_DB_STATE_UNKNOWN   DBState = 0
-	DBState_DB_STATE_ACTIVE    DBState = 1
-	DBState_DB_STATE_PAUSED    DBState = 2
-	DBState_DB_STATE_NOT_FOUND DBState = 3
-)
-
-// Enum value maps for DBState.
-var (
-	DBState_name = map[int32]string{
-		0: "DB_STATE_UNKNOWN",
-		1: "DB_STATE_ACTIVE",
-		2: "DB_STATE_PAUSED",
-		3: "DB_STATE_NOT_FOUND",
-	}
-	DBState_value = map[string]int32{
-		"DB_STATE_UNKNOWN":   0,
-		"DB_STATE_ACTIVE":    1,
-		"DB_STATE_PAUSED":    2,
-		"DB_STATE_NOT_FOUND": 3,
-	}
-)
-
-func (x DBState) Enum() *DBState {
-	p := new(DBState)
-	*p = x
-	return p
-}
-
-func (x DBState) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (DBState) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_worker_proto_enumTypes[0].Descriptor()
-}
-
-func (DBState) Type() protoreflect.EnumType {
-	return &file_proto_worker_proto_enumTypes[0]
-}
-
-func (x DBState) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use DBState.Descriptor instead.
-func (DBState) EnumDescriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{0}
-}
-
 type Empty struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -153,50 +101,6 @@ func (x *DatabaseRequest) GetDatabaseId() string {
 	return ""
 }
 
-type DatabaseStateResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	State         DBState                `protobuf:"varint,1,opt,name=state,proto3,enum=worker.DBState" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DatabaseStateResponse) Reset() {
-	*x = DatabaseStateResponse{}
-	mi := &file_proto_worker_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DatabaseStateResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DatabaseStateResponse) ProtoMessage() {}
-
-func (x *DatabaseStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DatabaseStateResponse.ProtoReflect.Descriptor instead.
-func (*DatabaseStateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *DatabaseStateResponse) GetState() DBState {
-	if x != nil {
-		return x.State
-	}
-	return DBState_DB_STATE_UNKNOWN
-}
-
 type StatusResponse struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	CanAssign           bool                   `protobuf:"varint,1,opt,name=can_assign,json=canAssign,proto3" json:"can_assign,omitempty"`
@@ -208,7 +112,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_proto_worker_proto_msgTypes[3]
+	mi := &file_proto_worker_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +124,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_worker_proto_msgTypes[3]
+	mi := &file_proto_worker_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +137,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_proto_worker_proto_rawDescGZIP(), []int{3}
+	return file_proto_worker_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *StatusResponse) GetCanAssign() bool {
@@ -265,25 +169,17 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x05Empty\"2\n" +
 	"\x0fDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseId\">\n" +
-	"\x15DatabaseStateResponse\x12%\n" +
-	"\x05state\x18\x01 \x01(\x0e2\x0f.worker.DBStateR\x05state\"\x91\x01\n" +
+	"databaseId\"\x91\x01\n" +
 	"\x0eStatusResponse\x12\x1d\n" +
 	"\n" +
 	"can_assign\x18\x01 \x01(\bR\tcanAssign\x12-\n" +
 	"\x12assigned_databases\x18\x02 \x03(\tR\x11assignedDatabases\x121\n" +
-	"\x14available_containers\x18\x03 \x01(\x05R\x13availableContainers*a\n" +
-	"\aDBState\x12\x14\n" +
-	"\x10DB_STATE_UNKNOWN\x10\x00\x12\x13\n" +
-	"\x0fDB_STATE_ACTIVE\x10\x01\x12\x13\n" +
-	"\x0fDB_STATE_PAUSED\x10\x02\x12\x16\n" +
-	"\x12DB_STATE_NOT_FOUND\x10\x032\xe9\x02\n" +
+	"\x14available_containers\x18\x03 \x01(\x05R\x13availableContainers2\xa0\x02\n" +
 	"\x06Worker\x128\n" +
 	"\x0eCreateDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x128\n" +
 	"\x0eResumeDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x127\n" +
 	"\rPauseDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x128\n" +
-	"\x0eDeleteDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x12G\n" +
-	"\rDatabaseState\x12\x17.worker.DatabaseRequest\x1a\x1d.worker.DatabaseStateResponse\x12/\n" +
+	"\x0eDeleteDatabase\x12\x17.worker.DatabaseRequest\x1a\r.worker.Empty\x12/\n" +
 	"\x06Status\x12\r.worker.Empty\x1a\x16.worker.StatusResponseB\x1bZ\x19burstkv/internal/workerpbb\x06proto3"
 
 var (
@@ -298,34 +194,28 @@ func file_proto_worker_proto_rawDescGZIP() []byte {
 	return file_proto_worker_proto_rawDescData
 }
 
-var file_proto_worker_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_worker_proto_goTypes = []any{
-	(DBState)(0),                  // 0: worker.DBState
-	(*Empty)(nil),                 // 1: worker.Empty
-	(*DatabaseRequest)(nil),       // 2: worker.DatabaseRequest
-	(*DatabaseStateResponse)(nil), // 3: worker.DatabaseStateResponse
-	(*StatusResponse)(nil),        // 4: worker.StatusResponse
+	(*Empty)(nil),           // 0: worker.Empty
+	(*DatabaseRequest)(nil), // 1: worker.DatabaseRequest
+	(*StatusResponse)(nil),  // 2: worker.StatusResponse
 }
 var file_proto_worker_proto_depIdxs = []int32{
-	0, // 0: worker.DatabaseStateResponse.state:type_name -> worker.DBState
-	2, // 1: worker.Worker.CreateDatabase:input_type -> worker.DatabaseRequest
-	2, // 2: worker.Worker.ResumeDatabase:input_type -> worker.DatabaseRequest
-	2, // 3: worker.Worker.PauseDatabase:input_type -> worker.DatabaseRequest
-	2, // 4: worker.Worker.DeleteDatabase:input_type -> worker.DatabaseRequest
-	2, // 5: worker.Worker.DatabaseState:input_type -> worker.DatabaseRequest
-	1, // 6: worker.Worker.Status:input_type -> worker.Empty
-	1, // 7: worker.Worker.CreateDatabase:output_type -> worker.Empty
-	1, // 8: worker.Worker.ResumeDatabase:output_type -> worker.Empty
-	1, // 9: worker.Worker.PauseDatabase:output_type -> worker.Empty
-	1, // 10: worker.Worker.DeleteDatabase:output_type -> worker.Empty
-	3, // 11: worker.Worker.DatabaseState:output_type -> worker.DatabaseStateResponse
-	4, // 12: worker.Worker.Status:output_type -> worker.StatusResponse
-	7, // [7:13] is the sub-list for method output_type
-	1, // [1:7] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 0: worker.Worker.CreateDatabase:input_type -> worker.DatabaseRequest
+	1, // 1: worker.Worker.ResumeDatabase:input_type -> worker.DatabaseRequest
+	1, // 2: worker.Worker.PauseDatabase:input_type -> worker.DatabaseRequest
+	1, // 3: worker.Worker.DeleteDatabase:input_type -> worker.DatabaseRequest
+	0, // 4: worker.Worker.Status:input_type -> worker.Empty
+	0, // 5: worker.Worker.CreateDatabase:output_type -> worker.Empty
+	0, // 6: worker.Worker.ResumeDatabase:output_type -> worker.Empty
+	0, // 7: worker.Worker.PauseDatabase:output_type -> worker.Empty
+	0, // 8: worker.Worker.DeleteDatabase:output_type -> worker.Empty
+	2, // 9: worker.Worker.Status:output_type -> worker.StatusResponse
+	5, // [5:10] is the sub-list for method output_type
+	0, // [0:5] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_proto_worker_proto_init() }
@@ -338,14 +228,13 @@ func file_proto_worker_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_worker_proto_rawDesc), len(file_proto_worker_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   4,
+			NumEnums:      0,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_worker_proto_goTypes,
 		DependencyIndexes: file_proto_worker_proto_depIdxs,
-		EnumInfos:         file_proto_worker_proto_enumTypes,
 		MessageInfos:      file_proto_worker_proto_msgTypes,
 	}.Build()
 	File_proto_worker_proto = out.File

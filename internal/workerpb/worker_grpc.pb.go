@@ -23,7 +23,6 @@ const (
 	Worker_ResumeDatabase_FullMethodName = "/worker.Worker/ResumeDatabase"
 	Worker_PauseDatabase_FullMethodName  = "/worker.Worker/PauseDatabase"
 	Worker_DeleteDatabase_FullMethodName = "/worker.Worker/DeleteDatabase"
-	Worker_DatabaseState_FullMethodName  = "/worker.Worker/DatabaseState"
 	Worker_Status_FullMethodName         = "/worker.Worker/Status"
 )
 
@@ -37,7 +36,6 @@ type WorkerClient interface {
 	ResumeDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
 	PauseDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
 	DeleteDatabase(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
-	DatabaseState(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*DatabaseStateResponse, error)
 	Status(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
@@ -89,16 +87,6 @@ func (c *workerClient) DeleteDatabase(ctx context.Context, in *DatabaseRequest, 
 	return out, nil
 }
 
-func (c *workerClient) DatabaseState(ctx context.Context, in *DatabaseRequest, opts ...grpc.CallOption) (*DatabaseStateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DatabaseStateResponse)
-	err := c.cc.Invoke(ctx, Worker_DatabaseState_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *workerClient) Status(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*StatusResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StatusResponse)
@@ -119,7 +107,6 @@ type WorkerServer interface {
 	ResumeDatabase(context.Context, *DatabaseRequest) (*Empty, error)
 	PauseDatabase(context.Context, *DatabaseRequest) (*Empty, error)
 	DeleteDatabase(context.Context, *DatabaseRequest) (*Empty, error)
-	DatabaseState(context.Context, *DatabaseRequest) (*DatabaseStateResponse, error)
 	Status(context.Context, *Empty) (*StatusResponse, error)
 	mustEmbedUnimplementedWorkerServer()
 }
@@ -142,9 +129,6 @@ func (UnimplementedWorkerServer) PauseDatabase(context.Context, *DatabaseRequest
 }
 func (UnimplementedWorkerServer) DeleteDatabase(context.Context, *DatabaseRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteDatabase not implemented")
-}
-func (UnimplementedWorkerServer) DatabaseState(context.Context, *DatabaseRequest) (*DatabaseStateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DatabaseState not implemented")
 }
 func (UnimplementedWorkerServer) Status(context.Context, *Empty) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Status not implemented")
@@ -242,24 +226,6 @@ func _Worker_DeleteDatabase_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Worker_DatabaseState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DatabaseRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkerServer).DatabaseState(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Worker_DatabaseState_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).DatabaseState(ctx, req.(*DatabaseRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Worker_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
@@ -300,10 +266,6 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteDatabase",
 			Handler:    _Worker_DeleteDatabase_Handler,
-		},
-		{
-			MethodName: "DatabaseState",
-			Handler:    _Worker_DatabaseState_Handler,
 		},
 		{
 			MethodName: "Status",
