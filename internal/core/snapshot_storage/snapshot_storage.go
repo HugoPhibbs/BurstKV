@@ -16,10 +16,10 @@ type SnapshotStorage struct {
 	minioClient *minio.Client
 }
 
-func NewSnapshotStorage(storageURL string, bucketName string, minioCreds *credentials.Credentials, local bool) *SnapshotStorage {
+func NewSnapshotStorage(storageURL string, bucketName string, minioCreds *credentials.Credentials, useHttps bool) *SnapshotStorage {
 	minioClient, err := minio.New(storageURL, &minio.Options{
 		Creds: minioCreds,
-		Secure: !local,
+		Secure: useHttps,
 	})
 
 	if err != nil {
@@ -99,4 +99,24 @@ func (s *SnapshotStorage) DeleteSnapshot(ctx context.Context, databaseId string)
 		return false, err
 	}
 	return true, nil
+}
+
+func (s *SnapshotStorage) NumSnapshots(ctx context.Context) (int, error) {
+	count := 0
+	for obj := range s.minioClient.ListObjects(ctx, s.bucketName, minio.ListObjectsOptions{Recursive: true}) {
+		if obj.Err != nil {
+			return 0, obj.Err
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (s *SnapshotStorage) SnapshotLastUpdateTime(ctx context.Context, databaseId string) (int64, error) {
+	objectName := s.snapshotObjectName(databaseId)
+	info, err := s.minioClient.StatObject(ctx, s.bucketName, objectName, minio.StatObjectOptions{})
+	if err != nil {
+		return 0, err
+	}
+	return info.LastModified.Unix(), nil
 }
