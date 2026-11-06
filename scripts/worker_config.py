@@ -34,8 +34,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Build/start the worker image")
     parser.add_argument("--build-image", action="store_true", help="Build the image")
     parser.add_argument("--start-container", action="store_true", help="Start the worker container")
-    parser.add_argument("--host-proxy-port", "-hpp", type=int, default=6380)
-    parser.add_argument("--host-grpc-port", "-hgp", type=int, default=6381)
+    parser.add_argument("--proxy-port", "-pp", type=int, default=6380)
+    parser.add_argument("--grpc-port", "-gp", type=int, default=6381)
     
     args, worker_args = parser.parse_known_args()
 
