@@ -1,4 +1,4 @@
-package redis_db
+package database
 
 import (
 	"testing"
@@ -15,22 +15,22 @@ func TestMain(m *testing.M) {
 
 func TestRedisDB_TestUpdateLastRequest(t *testing.T) {
 	// Create a new RedisDB instance
-	rdb := NewRedisDB("localhost:6379", "password")
+	rdb := NewDatabase("test_db", "worker_1")
 
 	// Test that the last request time is initially nil
-	assert.Nil(t, rdb.LastRequestTime(), "expected LastRequestTime to be nil initially")
+	assert.Nil(t, rdb.LatestActivity(), "expected LastRequestTime to be nil initially")
 
 	// Update the last request time
 	rdb.RecordActivity()
 
 	// Test that the last request time is now set
 	rdb.RecordActivity()
-	newLastRequestTime := rdb.LastRequestTime()
-	assert.NotNil(t, newLastRequestTime, "expected LastRequestTime to be set after update")
+	updatedLatestActivity := rdb.LatestActivity()
+	assert.NotNil(t, updatedLatestActivity, "expected LastRequestTime to be set after update")
 
 	time.Sleep(1 * time.Second) // Sleep for a second to ensure the time changes
 
 	rdb.RecordActivity()
-	newLastRequestTime2 := rdb.LastRequestTime()
-	assert.Greater(t, *newLastRequestTime2, *newLastRequestTime, "expected LastRequestTime to be updated to a later time after second update")
+	newLastRequestTime2 := rdb.LatestActivity()
+	assert.Greater(t, *newLastRequestTime2, *updatedLatestActivity, "expected LastRequestTime to be updated to a later time after second update")
 }

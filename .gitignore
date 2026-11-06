@@ -1,3 +1,5 @@
 bin/*
 !bin/.gitkeep
 .exe
+.snapshot_server_dev/*
+!.snapshot_server_dev/.gitkeep

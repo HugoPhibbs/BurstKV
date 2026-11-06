@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package worker;
+
+option go_package = "burstkv/internal/workerpb";
+
+// Called by the central node to manage databases on a worker node.
+service Worker {
+  rpc CreateDatabase(DatabaseRequest) returns (Empty);
+  rpc ResumeDatabase(DatabaseRequest) returns (Empty);
+  rpc PauseDatabase(DatabaseRequest) returns (Empty);
+  rpc DeleteDatabase(DatabaseRequest) returns (Empty);
+  rpc Status(Empty) returns (StatusResponse);
+}
+
+message Empty {}
+
+message DatabaseRequest {
+  string database_id = 1;
+}
+
+message StatusResponse {
+  bool can_assign = 1;
+  repeated string assigned_databases = 2;
+  int32 available_containers = 3;
+}

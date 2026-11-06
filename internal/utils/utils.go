@@ -3,7 +3,9 @@ package utils
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"time"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -22,4 +24,14 @@ func WaitForRedis(ctx context.Context, rdb *redis.Client, timeout int) error {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// Generates a random string of length n from lower/uppercase letters and digits.
+func RandomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, n)
+	for i := range n {
+		result[i] = letters[rand.IntN(len(letters))]
+	}
+	return string(result)
 }

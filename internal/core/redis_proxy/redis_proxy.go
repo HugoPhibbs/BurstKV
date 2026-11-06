@@ -1,4 +1,4 @@
-package db_proxy
+package redis_proxy
 
 import (
 	"bufio"
@@ -9,8 +9,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
-	"burstkv/internal/db_manager"
 )
 
 // Max args / bytes per arg accepted in the first command, so a bad client can't make us allocate huge buffers.
@@ -29,13 +27,18 @@ func (ar *activityReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-type RedisProxy struct {
-	listenAddr string
-	db_manager *db_manager.DBManager
+type Router interface {
+	RouteDatabase(databaseId string) (string, error)
+	RecordDatabaseActivity(databaseId string)
 }
 
-func NewRedisProxy(listenAddr string, db_manager *db_manager.DBManager) *RedisProxy {
-	return &RedisProxy{listenAddr: listenAddr, db_manager: db_manager}
+type RedisProxy struct {
+	listenAddr string
+	router     Router
+}
+
+func NewRedisProxy(listenAddr string, router Router) *RedisProxy {
+	return &RedisProxy{listenAddr: listenAddr, router: router}
 }
 
 // Listens on listenAddr and proxies every connection. Blocks.
@@ -45,7 +48,6 @@ func (p *RedisProxy) ListenAndServe() error {
 		return err
 	}
 	defer ln.Close()
-	log.Printf("proxy: listening on %s", p.listenAddr)
 
 	for {
 		client, err := ln.Accept()
@@ -72,7 +74,7 @@ func (p *RedisProxy) handle(client net.Conn) {
 		return
 	}
 
-	addr, err := p.db_manager.DatabaseAddress(databaseId)
+	addr, err := p.router.RouteDatabase(databaseId)
 	if err != nil {
 		io.WriteString(client, "-ERR "+err.Error()+"\r\n")
 		return
@@ -86,7 +88,7 @@ func (p *RedisProxy) handle(client net.Conn) {
 	}
 	defer upstream.Close()
 
-	recordActivity := func() { p.db_manager.RecordDatabaseActivity(databaseId) }
+	recordActivity := func() { p.router.RecordDatabaseActivity(databaseId) }
 	done := make(chan struct{}, 2)
 	pipe := func(dst io.Writer, src io.Reader) {
 		io.Copy(dst, src)
