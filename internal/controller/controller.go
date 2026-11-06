@@ -1,9 +1,11 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/database"
 	"burstkv/internal/controller/domain/controlled_worker"
+	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/utils"
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -16,17 +18,19 @@ const DEFAULT_REAPER_TIME_INTERVAL = 1 * time.Minute
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
-	workers            map[string]*controlled_worker.ControlledWorker   // workerID -> Worker
-	databases          map[string]*database.Database // databaseID -> Database
+	workers            map[string]*controlled_worker.ControlledWorker // workerID -> Worker
+	databases          map[string]*database.Database                  // databaseID -> Database
+	snapShotstorage    *snapshot_storage.SnapshotStorage
 }
 
 // Creates a new DBManager with the given runtime and idle limit
-func NewController(idleLimit time.Duration) *Controller {
+func NewController(idleLimit time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage) *Controller {
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: DEFAULT_REAPER_TIME_INTERVAL,
 		workers:            make(map[string]*controlled_worker.ControlledWorker),
 		databases:          make(map[string]*database.Database),
+		snapShotstorage: snapshotStorage,
 	}
 }
 
@@ -48,7 +52,14 @@ func (c *Controller) AddWorker(worker *controlled_worker.ControlledWorker) {
 
 // Returns the state of the database with the given ID.
 func (c *Controller) GetDatabaseState(databaseId string) (database.DatabaseStatus, error) {
-	return database.NotFound, nil
+	foundDatabase, exists := c.databases[databaseId]
+	if !exists {
+		return database.NotFound, nil
+	}
+	if foundDatabase.IsRunning() {
+		return database.Running, nil
+	}
+	return database.Paused, nil
 }
 
 // Returns a list of all database IDs managed by this DBManager.
@@ -75,13 +86,22 @@ func (c *Controller) CreateDatabase() (string, error) {
 
 // Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
-func (c *Controller) DeleteDatabase(databaseId string) error {
+func (c *Controller) DeleteDatabase(ctx context.Context, databaseId string) error {
 	if database, exists := c.databases[databaseId]; exists {
-		worker := c.workers[database.WorkerID()]
-		err := worker.DeleteDatabase(databaseId)
-		if err != nil {
-			return err
+		isRunning := database.IsRunning()
+		if isRunning {
+			worker, ok := c.workers[database.WorkerID()]
+			if !ok {
+				panic("Invalid state: Database is assigned to a worker, yet the worker doesn't contain the database")
+			}
+			err := worker.DeleteDatabase(databaseId)
+			if err != nil {
+				return err
+			}
+		} else {
+			c.snapShotstorage.DeleteSnapshot(ctx, databaseId)
 		}
+
 		delete(c.databases, databaseId)
 		return nil
 	}
@@ -89,9 +109,9 @@ func (c *Controller) DeleteDatabase(databaseId string) error {
 }
 
 // Deletes all databases managed by this DBManager.
-func (c *Controller) DeleteAllDatabases() error {
+func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 	for id := range c.databases {
-		err := c.DeleteDatabase(id)
+		err := c.DeleteDatabase(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -123,8 +143,11 @@ func (c *Controller) PauseDatabase(databaseId string) error {
 	if !exists {
 		return ErrDatabaseNotFound
 	}
-	if !database.IsActive() {
+	if !database.IsRunning() {
 		return ErrDatabaseAlreadyPaused
+	}
+	if err := c.workers[database.WorkerID()].PauseDatabase(databaseId); err != nil {
+		return err
 	}
 	database.RemoveWorker()
 	return nil
@@ -138,7 +161,7 @@ func (c *Controller) ResumeDatabase(databaseId string) error {
 		return ErrDatabaseNotFound
 	}
 
-	if database.IsActive() {
+	if database.IsRunning() {
 		return ErrDatabaseAlreadyActive
 	}
 
