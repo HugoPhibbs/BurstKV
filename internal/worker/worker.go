@@ -1,10 +1,10 @@
 package worker
 
 import (
+	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/utils"
 	"context"
 	"fmt"
-	"io"
 	"maps"
 	"os/exec"
 	"slices"
@@ -12,13 +12,6 @@ import (
 
 var REDIS_IMAGE = "redis:8.10.3"
 
-// Allows for mocking by interface
-type SnapshotStorage interface {
-	SaveSnapshot(ctx context.Context, databaseID string, tarStream io.Reader) error
-	LoadSnapshot(ctx context.Context, databaseID string, w io.Writer) error
-	SnapshotExists(ctx context.Context, databaseID string) (bool, error)
-	DeleteSnapshot(ctx context.Context, databaseID string) (bool, error)
-}
 
 type DatabaseContainer struct {
 	containerID string
@@ -29,11 +22,11 @@ type Worker struct {
 	WorkerID        string
 	containerPool   chan *DatabaseContainer       // Containers not assigned to a database
 	assigned        map[string]*DatabaseContainer // databaseID -> container
-	snapshotStorage SnapshotStorage
+	snapshotStorage *snapshot_storage.SnapshotStorage
 }
 
 // Creates a Worker and starts poolSize idle containers on ports minPort to minPort+poolSize-1.
-func NewWorker(workerID string, minPort int, poolSize int, snapshotStorage SnapshotStorage) (*Worker, error) {
+func NewWorker(workerID string, minPort int, poolSize int, snapshotStorage *snapshot_storage.SnapshotStorage) (*Worker, error) {
 	wm := &Worker{
 		WorkerID:        workerID,
 		containerPool:   make(chan *DatabaseContainer, poolSize),
@@ -44,28 +37,13 @@ func NewWorker(workerID string, minPort int, poolSize int, snapshotStorage Snaps
 	for port := minPort; port < minPort+poolSize; port++ {
 		container, err := wm.createContainer(port)
 		if err != nil {
-			wm.Close()
+			wm.StopAllContainers()
 			return nil, err
 		}
 		wm.containerPool <- container
 	}
 
 	return wm, nil
-}
-
-// Removes all containers, assigned or not.
-func (w *Worker) Close() {
-	for _, container := range w.assigned {
-		w.deleteContainer(container)
-	}
-	for {
-		select {
-		case container := <-w.containerPool:
-			w.deleteContainer(container)
-		default:
-			return
-		}
-	}
 }
 
 func (w *Worker) CanAssignDatabase() bool {
@@ -150,7 +128,7 @@ func (w *Worker) startDatabase(databaseID string, container *DatabaseContainer, 
 			return err
 		}
 		if !snapshotExists {
-			return ErrSnapshotNotFound
+			return snapshot_storage.ErrSnapshotNotFound
 		}
 
 		if err := w.loadSnapshot(context.Background(), databaseID, container.containerID); err != nil {
@@ -162,7 +140,7 @@ func (w *Worker) startDatabase(databaseID string, container *DatabaseContainer, 
 }
 
 func (w *Worker) loadSnapshot(ctx context.Context, databaseID string, containerID string) error {
-	cmd := exec.CommandContext(ctx, "docker", "cp", "-", w.containerName(containerID) + ":/data")
+	cmd := exec.CommandContext(ctx, "docker", "cp", "-", w.containerName(containerID)+":/data")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -181,6 +159,10 @@ func (w *Worker) loadSnapshot(ctx context.Context, databaseID string, containerI
 }
 
 func (w *Worker) saveSnapshot(ctx context.Context, databaseID string, containerID string) error {
+	if err := exec.CommandContext(ctx, "docker", "exec", w.containerName(containerID), "redis-cli", "-a", databaseID, "SAVE").Run(); err != nil {
+		return err
+	}
+
 	cmd := exec.CommandContext(ctx, "docker", "cp", w.containerSnapshotPath(containerID), "-")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -204,11 +186,6 @@ func (w *Worker) PauseDatabase(ctx context.Context, databaseID string) error {
 		return ErrDatabaseNotAssigned
 	}
 
-	name := w.containerName(container.containerID)
-	if err := exec.Command("docker", "exec", name, "redis-cli", "-a", databaseID, "SAVE").Run(); err != nil {
-		return err
-	}
-
 	if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
 		return err
 	}
@@ -227,12 +204,35 @@ func (w *Worker) DeleteDatabase(ctx context.Context, databaseID string) error {
 	deleted, err := w.snapshotStorage.DeleteSnapshot(ctx, databaseID)
 	if err != nil {
 		return err
-	} 
+	}
 	if !deleted {
-		println( fmt.Sprintf("Warning: snapshot for database %s not deleted", databaseID))
+		println(fmt.Sprintf("Warning: snapshot for database %s not deleted", databaseID))
 	}
 
 	return nil
+}
+
+
+// Removes all containers, assigned or not.
+func (w *Worker) StopAllContainers() (bool, error) {
+	success := true
+	for databaseID, container := range w.assigned {
+		ctx := context.Background()
+		if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
+			fmt.Printf("Failed to save snapshot for database %s: %v\n", databaseID, err)
+			success = false
+		}
+		w.deleteContainer(container)
+		delete(w.assigned, databaseID)
+	}
+	for {
+		select {
+		case container := <-w.containerPool:
+			w.deleteContainer(container)
+		default:
+			return success, nil
+		}
+	}
 }
 
 // Deletes the database's container and puts a fresh one on the same port into the pool.
