@@ -43,7 +43,7 @@ func New(ctrl *controller.Controller) *gin.Engine {
 	})
 
 	router.DELETE("/database/delete/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.DeleteDatabase(c.Param("databaseId")))
+		writeResult(c, ctrl.DeleteDatabase(c.Request.Context(), c.Param("databaseId")))
 	})
 
 	router.POST("/database/pause/:databaseId", func(c *gin.Context) {
