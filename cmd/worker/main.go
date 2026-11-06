@@ -2,14 +2,17 @@ package main
 
 import (
 	"burstkv/internal/core/redis_proxy"
-	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
+	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/worker"
 	"burstkv/internal/worker/grpc"
 	"context"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
+
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func main() {
@@ -17,7 +20,16 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	worker, err := worker.NewWorker("worker-1", 30000, 10, &snapshot_storage_test.NoopSnapshotStorage{})
+	storagePort := "9000"
+	accessKey := "test-ak"
+	secretKey := "test-sk"
+	exec.CommandContext(ctx, "python", "scripts/start_dev_snapshot_server.py", "--api-port", storagePort, "--access-key", accessKey, "--secret-key", secretKey).Start()
+
+	storageAddr := "localhost:" + storagePort
+	minIoCreds := credentials.NewStaticV4(accessKey, secretKey, "")
+	snapShotStorage := snapshot_storage.NewSnapshotStorage(storageAddr, "snapshots", minIoCreds, false)
+
+	worker, err := worker.NewWorker("worker-1", 30000, 10, snapShotStorage)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,5 +55,5 @@ func main() {
 	<-ctx.Done() // Wait for SIGINT or SIGTERM
 	stop()       // A second ctrl+c or SIGTERM will exit immediately.
 	log.Println("Shutting down gracefully... (press Ctrl+C again to force exit - NB: Not recommended)")
-	worker.Close()
+	worker.StopAllContainers()
 }
