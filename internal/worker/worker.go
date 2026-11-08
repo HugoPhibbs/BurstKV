@@ -5,9 +5,9 @@ import (
 	"burstkv/internal/utils"
 	"context"
 	"fmt"
-	"maps"
 	"os/exec"
-	"slices"
+	"github.com/puzpuzpuz/xsync/v4"
+	"golang.org/x/sync/errgroup"
 )
 
 var REDIS_IMAGE = "redis:8.10.3"
@@ -21,29 +21,37 @@ type DatabaseContainer struct {
 type Worker struct {
 	WorkerID        string
 	containerPool   chan *DatabaseContainer       // Containers not assigned to a database
-	assigned        map[string]*DatabaseContainer // databaseID -> container
+	assigned        *xsync.Map[string, *DatabaseContainer]
 	snapshotStorage *snapshot_storage.SnapshotStorage
 }
 
 // Creates a Worker and starts poolSize idle containers on ports minPort to minPort+poolSize-1.
-func NewWorker(workerID string, minPort int, poolSize int, snapshotStorage *snapshot_storage.SnapshotStorage) (*Worker, error) {
-	wm := &Worker{
+func NewWorker(ctx context.Context, workerID string, minPort int, poolSize int, snapshotStorage *snapshot_storage.SnapshotStorage) (*Worker, error) {
+	w := &Worker{
 		WorkerID:        workerID,
 		containerPool:   make(chan *DatabaseContainer, poolSize),
-		assigned:        make(map[string]*DatabaseContainer),
+		assigned:        xsync.NewMap[string, *DatabaseContainer](),
 		snapshotStorage: snapshotStorage,
 	}
 
+	var eg errgroup.Group
+
 	for port := minPort; port < minPort+poolSize; port++ {
-		container, err := wm.createContainer(port)
-		if err != nil {
-			wm.StopAllContainers()
-			return nil, err
-		}
-		wm.containerPool <- container
+		eg.Go(func() error {
+			container, err := w.createContainer(port)
+			if err != nil {
+				return err
+			}
+			w.containerPool <- container
+			return nil
+		})
 	}
 
-	return wm, nil
+	if err := eg.Wait(); err != nil {
+		w.StopAllContainers(ctx)
+	}
+
+	return w, nil
 }
 
 func (w *Worker) CanAssignDatabase() bool {
@@ -55,12 +63,16 @@ func (w *Worker) AvailableContainerCount() int {
 }
 
 func (w *Worker) AssignedDatabases() []string {
-	return slices.Collect(maps.Keys(w.assigned))
+    ids := make([]string, 0, w.assigned.Size())
+    for id := range w.assigned.All() {
+        ids = append(ids, id)
+    }
+    return ids
 }
 
 func (w *Worker) IsAssigned(databaseID string) bool {
-	_, assigned := w.assigned[databaseID]
-	return assigned
+	_, exists := w.assigned.Load(databaseID)
+	return exists;
 }
 
 // Starts a new idle container on the given port.
@@ -77,17 +89,22 @@ func (w *Worker) createContainer(port int) (*DatabaseContainer, error) {
 		return nil, fmt.Errorf("starting container on port %d: %w", port, err)
 	}
 
+	w.containerPool <- container
+
 	return container, nil
 }
 
 // Removes a container completely.
 func (w *Worker) deleteContainer(container *DatabaseContainer) error {
-	return exec.Command("docker", "rm", "-f", w.containerName(container.containerID)).Run()
+	if err := exec.Command("docker", "rm", "-f", w.containerName(container.containerID)).Run(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Takes a container from the pool, loads the database's snapshot (if any) and starts Redis. Returns the address.
-func (w *Worker) assignDatabase(databaseID string, createNew bool) error {
-	if _, exists := w.assigned[databaseID]; exists {
+func (w *Worker) assignDatabase(ctx context.Context, databaseID string, createNew bool) error {
+	if w.IsAssigned(databaseID) {
 		return ErrDatabaseAlreadyAssigned
 	}
 
@@ -98,7 +115,7 @@ func (w *Worker) assignDatabase(databaseID string, createNew bool) error {
 		return ErrNoAvailableContainers
 	}
 
-	if err := w.startDatabase(databaseID, container, createNew); err != nil {
+	if err := w.startDatabase(ctx, databaseID, container, createNew); err != nil {
 		releaseErr := w.releaseContainer(databaseID, container)
 		if releaseErr != nil {
 			return fmt.Errorf("starting database and releasing container: %v, %v", err, releaseErr)
@@ -106,24 +123,24 @@ func (w *Worker) assignDatabase(databaseID string, createNew bool) error {
 		return err
 	}
 
-	w.assigned[databaseID] = container
+	w.assigned.Store(databaseID, container)
 	return nil
 }
 
-func (w *Worker) CreateDatabase(databaseID string) error {
-	return w.assignDatabase(databaseID, true)
+func (w *Worker) CreateDatabase(ctx context.Context, databaseID string) error {
+	return w.assignDatabase(ctx, databaseID, true)
 }
 
-func (w *Worker) ResumeDatabase(databaseID string) error {
-	return w.assignDatabase(databaseID, false)
+func (w *Worker) ResumeDatabase(ctx context.Context, databaseID string) error {
+	return w.assignDatabase(ctx, databaseID, false)
 }
 
 // Copies the database's snapshot into the container (if one exists) and starts Redis.
-func (w *Worker) startDatabase(databaseID string, container *DatabaseContainer, createNew bool) error {
+func (w *Worker) startDatabase(ctx context.Context, databaseID string, container *DatabaseContainer, createNew bool) error {
 	name := w.containerName(container.containerID)
 
 	if !createNew {
-		snapshotExists, err := w.snapshotStorage.SnapshotExists(context.Background(), databaseID)
+		snapshotExists, err := w.snapshotStorage.SnapshotExists(ctx, databaseID)
 		if err != nil {
 			return err
 		}
@@ -131,7 +148,7 @@ func (w *Worker) startDatabase(databaseID string, container *DatabaseContainer, 
 			return snapshot_storage.ErrSnapshotNotFound
 		}
 
-		if err := w.loadSnapshot(context.Background(), databaseID, container.containerID); err != nil {
+		if err := w.loadSnapshot(ctx, databaseID, container.containerID); err != nil {
 			return err
 		}
 	}
@@ -181,8 +198,8 @@ func (w *Worker) saveSnapshot(ctx context.Context, databaseID string, containerI
 
 // Saves the database's snapshot locally and returns its container to the pool.
 func (w *Worker) PauseDatabase(ctx context.Context, databaseID string) error {
-	container, ok := w.assigned[databaseID]
-	if !ok {
+	container, exists := w.assigned.Load(databaseID)
+	if !exists {
 		return ErrDatabaseNotAssigned
 	}
 
@@ -195,7 +212,8 @@ func (w *Worker) PauseDatabase(ctx context.Context, databaseID string) error {
 
 // Deletes the database's snapshot and, if it is running, returns its container to the pool.
 func (w *Worker) DeleteDatabase(ctx context.Context, databaseID string) error {
-	if container, ok := w.assigned[databaseID]; ok {
+	container, exists := w.assigned.Load(databaseID)
+	if exists {
 		if err := w.releaseContainer(databaseID, container); err != nil {
 			return err
 		}
@@ -214,45 +232,55 @@ func (w *Worker) DeleteDatabase(ctx context.Context, databaseID string) error {
 
 
 // Removes all containers, assigned or not.
-func (w *Worker) StopAllContainers() (bool, error) {
-	success := true
-	for databaseID, container := range w.assigned {
-		ctx := context.Background()
-		if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
-			fmt.Printf("Failed to save snapshot for database %s: %v\n", databaseID, err)
-			success = false
-		}
-		w.deleteContainer(container)
-		delete(w.assigned, databaseID)
+func (w *Worker) StopAllContainers(ctx context.Context) error {
+	var eg errgroup.Group
+	
+	// Delete assigned containers
+	for databaseID, container := range w.assigned.All() {
+		eg.Go(func() error {
+			if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
+				fmt.Printf("Failed to save snapshot for database %s: %v\n", databaseID, err)
+				return err
+			}
+			if err := w.deleteContainer(container); err != nil {
+				return err
+			}
+			w.assigned.Delete(databaseID)
+			return nil
+		})
 	}
+
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	// Delete un-assigned containers
 	for {
 		select {
 		case container := <-w.containerPool:
-			w.deleteContainer(container)
+			if err := w.deleteContainer(container); err != nil {
+				return err
+			}
 		default:
-			return success, nil
+			return nil
 		}
 	}
 }
 
-// Deletes the database's container and puts a fresh one on the same port into the pool.
+// Deletes the database's container creates a fresh one
 func (w *Worker) releaseContainer(databaseID string, container *DatabaseContainer) error {
 	if err := w.deleteContainer(container); err != nil {
 		return err
 	}
-	delete(w.assigned, databaseID)
+	w.assigned.Delete(databaseID)
 
-	newContainer, err := w.createContainer(container.port)
-	if err != nil {
-		return err
-	}
-	w.containerPool <- newContainer
-	return nil
+	_, err := w.createContainer(container.port)
+	return err
 }
 
 func (w *Worker) DatabaseAddress(databaseID string) (string, error) {
-	container, ok := w.assigned[databaseID]
-	if !ok {
+	container, exists := w.assigned.Load(databaseID)
+	if !exists {
 		return "", ErrDatabaseNotAssigned
 	}
 	return w.formatAddress(container.port), nil
@@ -264,7 +292,7 @@ func (w *Worker) formatAddress(port int) string {
 }
 
 func (w *Worker) containerName(containerID string) string {
-	return fmt.Sprintf("burstkv-%s-%s", w.WorkerID, containerID)
+	return fmt.Sprintf("burstkv-worker-%s-%s", w.WorkerID, containerID)
 }
 
 func (w *Worker) containerSnapshotPath(containerID string) string {
