@@ -7,12 +7,11 @@
 package workerpb
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -60,7 +59,7 @@ func (*Empty) Descriptor() ([]byte, []int) {
 
 type DatabaseRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	databaseID    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseID,proto3" json:"database_id,omitempty"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -95,9 +94,9 @@ func (*DatabaseRequest) Descriptor() ([]byte, []int) {
 	return file_proto_worker_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *DatabaseRequest) GetDatabaseID() string {
+func (x *DatabaseRequest) GetDatabaseId() string {
 	if x != nil {
-		return x.databaseID
+		return x.DatabaseId
 	}
 	return ""
 }
@@ -170,7 +169,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x05Empty\"2\n" +
 	"\x0fDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseID\"\x91\x01\n" +
+	"databaseId\"\x91\x01\n" +
 	"\x0eStatusResponse\x12\x1d\n" +
 	"\n" +
 	"can_assign\x18\x01 \x01(\bR\tcanAssign\x12-\n" +

@@ -35,28 +35,28 @@ func NewControlledWorker(workerID string, grpcAddress string, proxyAddress strin
 
 func (w *ControlledWorker) DeleteDatabase(ctx context.Context, databaseID string) error {
 	_, err := w.client.DeleteDatabase(ctx, &workerpb.DatabaseRequest{
-		databaseID: databaseID,
+		DatabaseId: databaseID,
 	})
 	return err
 }
 
 func (w *ControlledWorker) CreateDatabase(ctx context.Context, databaseID string) error {
 	_, err := w.client.CreateDatabase(ctx, &workerpb.DatabaseRequest{
-		databaseID: databaseID,
+		DatabaseId: databaseID,
 	})
 	return err
 }
 
 func (w *ControlledWorker) ResumeDatabase(ctx context.Context, databaseID string) error {
 	_, err := w.client.ResumeDatabase(ctx, &workerpb.DatabaseRequest{
-		databaseID: databaseID,
+		DatabaseId: databaseID,
 	})
 	return err
 }
 
 func (w *ControlledWorker) PauseDatabase(ctx context.Context, databaseID string) error {
 	_, err := w.client.PauseDatabase(ctx, &workerpb.DatabaseRequest{
-		databaseID: databaseID,
+		DatabaseId: databaseID,
 	})
 	return err
 }

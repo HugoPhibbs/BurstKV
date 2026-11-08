@@ -40,7 +40,7 @@ func (s *GRPCServer) CreateDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	err := s.worker.CreateDatabase(ctx, req.GetDatabaseID())
+	err := s.worker.CreateDatabase(ctx, req.GetDatabaseId())
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -53,7 +53,7 @@ func (s *GRPCServer) ResumeDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	err := s.worker.ResumeDatabase(ctx, req.GetDatabaseID())
+	err := s.worker.ResumeDatabase(ctx, req.GetDatabaseId())
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -66,7 +66,7 @@ func (s *GRPCServer) PauseDatabase(ctx context.Context, req *pb.DatabaseRequest)
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	if err := s.worker.PauseDatabase(ctx, req.GetDatabaseID()); err != nil {
+	if err := s.worker.PauseDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.Empty{}, nil
@@ -78,7 +78,7 @@ func (s *GRPCServer) DeleteDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	if err := s.worker.DeleteDatabase(ctx, req.GetDatabaseID()); err != nil {
+	if err := s.worker.DeleteDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.Empty{}, nil
@@ -107,7 +107,7 @@ func toStatus(err error) error {
 }
 
 func requestHasDatabaseID(req *pb.DatabaseRequest) error {
-	if req.GetDatabaseID() == "" {
+	if req.GetDatabaseId() == "" {
 		return status.Error(codes.InvalidArgument, "database_id is required")
 	}
 	return nil
