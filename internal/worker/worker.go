@@ -38,17 +38,16 @@ func NewWorker(ctx context.Context, workerID string, minPort int, poolSize int, 
 
 	for port := minPort; port < minPort+poolSize; port++ {
 		eg.Go(func() error {
-			container, err := w.createContainer(port)
-			if err != nil {
+			if _, err := w.createContainer(port); err != nil {
 				return err
 			}
-			w.containerPool <- container
 			return nil
 		})
 	}
 
 	if err := eg.Wait(); err != nil {
 		w.StopAllContainers(ctx)
+		return nil, err
 	}
 
 	return w, nil

@@ -1,7 +1,6 @@
 package worker_test
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -30,18 +29,60 @@ func redisConnect(t *testing.T, addr, databaseID string) *redis.Client {
 	client := redis.NewClient(&redis.Options{Addr: addr, Password: databaseID})
 	t.Cleanup(func() { client.Close() })
 	require.Eventually(t, func() bool {
-		return client.Ping(context.Background()).Err() == nil
+		return client.Ping(t.Context()).Err() == nil
 	}, 10*time.Second, 100*time.Millisecond, "redis did not become ready")
 	return client
 }
 
-func TestWorker_CreateAndDeleteDatabase(t *testing.T) {
-	ctx := context.Background()
+func TestWorker_TestCanAssignDatabase(t *testing.T) {
+	ctx := t.Context()
+	worker, _ := NewMockWorker(t, 31000, 1)
+	assert.True(t, worker.CanAssignDatabase(), "Worker should be able to assign a database")
 
+	id := "assign-delete-test"
+
+	require.NoError(t, worker.CreateDatabase(ctx, id))
+
+	assert.False(t, worker.CanAssignDatabase(), "Worker should have no more containers to assign a database")
+
+	assert.NoError(t, worker.PauseDatabase(ctx, id))
+
+	assert.True(t, worker.CanAssignDatabase(), "Worker should now be able to be assigned a database")
+}
+
+func TestWorker_TestAssigningDatabases(t *testing.T) {
+	ctx := t.Context()
+	worker, _ := NewMockWorker(t, 31060, 3)
+	assert.Empty(t, worker.AssignedDatabases())
+
+	require.NoError(t, worker.CreateDatabase(ctx, "first"))
+	require.NoError(t, worker.CreateDatabase(ctx, "second"))
+	require.NoError(t, worker.CreateDatabase(ctx, "third"))
+	assert.ElementsMatch(t, []string{"first", "second", "third"}, worker.AssignedDatabases())
+
+	assert.True(t, worker.IsAssigned("first"), "first should be assigned")
+	assert.True(t, worker.IsAssigned("second"), "second should be assigned")
+	assert.True(t, worker.IsAssigned("third"), "third should be assigned")
+	assert.Equal(t, 0, worker.AvailableContainerCount())
+
+	require.NoError(t, worker.PauseDatabase(ctx, "second"))
+	assert.ElementsMatch(t, []string{"first", "third"}, worker.AssignedDatabases())
+	assert.False(t, worker.IsAssigned("second"), "Second should no longer be assigned")
+	assert.Equal(t, 1, worker.AvailableContainerCount())
+
+	require.NoError(t, worker.DeleteDatabase(ctx, "first"))
+	assert.ElementsMatch(t, []string{"third"}, worker.AssignedDatabases())
+	assert.False(t, worker.IsAssigned("first"), "first should no longer be assigned")
+	assert.Equal(t, 2, worker.AvailableContainerCount())
+}
+
+
+func TestWorker_TestCreateAndDeleteDatabase(t *testing.T) {
+	ctx := t.Context()
 	worker, _ := NewMockWorker(t, 31000, 1)
 	id := "assign-delete-test"
 
-	err := worker.CreateDatabase(id)
+	err := worker.CreateDatabase(ctx, id)
 	require.NoError(t, err)
 	addr, err := worker.DatabaseAddress(id)
 	require.NoError(t, err)
@@ -56,12 +97,12 @@ func TestWorker_CreateAndDeleteDatabase(t *testing.T) {
 	assert.Equal(t, 1, worker.AvailableContainerCount())
 }
 
-func TestWorker_PauseAndResumeDatabase(t *testing.T) {
+func TestWorker_TestPauseAndResumeDatabase(t *testing.T) {
 	worker, snapshotStorage := NewMockWorker(t, 31010, 1)
 	id := "pause-resume-test"
-	ctx := context.Background()
+	ctx := t.Context()
 
-	err := worker.CreateDatabase(id)
+	err := worker.CreateDatabase(ctx, id)
 	require.NoError(t, err)
 	addr, err := worker.DatabaseAddress(id)
 	require.NoError(t, err)
@@ -75,7 +116,7 @@ func TestWorker_PauseAndResumeDatabase(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, exists, "snapshot should exist after pausing database")
 
-	err = worker.ResumeDatabase(id)
+	err = worker.ResumeDatabase(ctx, id)
 	require.NoError(t, err)
 	addr, err = worker.DatabaseAddress(id)
 	require.NoError(t, err)
@@ -87,11 +128,11 @@ func TestWorker_PauseAndResumeDatabase(t *testing.T) {
 }
 
 func TestWorker_TestRepeatedPauseResume(t *testing.T) {
-	worker, snapshotStorage := NewMockWorker(t, 31020, 1)
+	worker, snapshotStorage := NewMockWorker(t, 31021, 1)
 	id := "repeated-pause-resume-test"
-	ctx := context.Background()
+	ctx := t.Context()
 
-	err := worker.CreateDatabase(id)
+	err := worker.CreateDatabase(ctx, id)
 	require.NoError(t, err)
 	addr, err := worker.DatabaseAddress(id)
 	require.NoError(t, err)
@@ -111,7 +152,7 @@ func TestWorker_TestRepeatedPauseResume(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, exists, "snapshot should exist after pausing database")
 
-		err = worker.ResumeDatabase(id)
+		err = worker.ResumeDatabase(ctx, id)
 		require.NoError(t, err)
 		addr, err = worker.DatabaseAddress(id)
 		require.NoError(t, err)
@@ -121,43 +162,41 @@ func TestWorker_TestRepeatedPauseResume(t *testing.T) {
 	}
 }
 
-func TestWorker_NoAvailableContainers(t *testing.T) {
-	ctx := context.Background()
-	mockWorker, _ := NewMockWorker(t, 31020, 1)
+func TestWorker_TestNoAvailableContainers(t *testing.T) {
+	ctx := t.Context()
+	mockWorker, _ := NewMockWorker(t, 31022, 1)
 
-	err := mockWorker.CreateDatabase("first")
+	err := mockWorker.CreateDatabase(ctx, "first")
 	require.NoError(t, err)
 	assert.False(t, mockWorker.CanAssignDatabase())
 
-	err = mockWorker.CreateDatabase("second")
+	err = mockWorker.CreateDatabase(ctx, "second")
 	assert.ErrorIs(t, err, worker.ErrNoAvailableContainers)
 
 	require.NoError(t, mockWorker.DeleteDatabase(ctx, "first"))
 }
 
-func TestWorker_PauseUnassignedDatabase(t *testing.T) {
-	ctx := context.Background()
+func TestWorker_TestPauseUnassignedDatabase(t *testing.T) {
+	ctx := t.Context()
 	mockWorker, _ := NewMockWorker(t, 31030, 1)
 
 	assert.ErrorIs(t, mockWorker.PauseDatabase(ctx, "missing"), worker.ErrDatabaseNotAssigned)
 }
 
 func TestWorker_TestStoppingAllContainers(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	worker, snapshotStorage := NewMockWorker(t, 31040, 2)
 
-	err := worker.CreateDatabase("first")
+	err := worker.CreateDatabase(ctx, "first")
 	require.NoError(t, err)
-	err = worker.CreateDatabase("second")
+	err = worker.CreateDatabase(ctx, "second")
 	require.NoError(t, err)
 
 	numSnapshots, _ := snapshotStorage.NumSnapshots(ctx)
 	assert.Equal(t, 0, numSnapshots, "expected no snapshots before stopping containers")
 
-	success, err := worker.StopAllContainers()
-	require.NoError(t, err)
-	assert.True(t, success, "expected all containers to stop successfully")
+	assert.NoError(t, worker.StopAllContainers(ctx), "expected all containers to stop successfully")
 	numSnapshots, _ = snapshotStorage.NumSnapshots(ctx)
 	assert.Equal(t, 2, numSnapshots, "expected snapshots to be saved after stopping all containers")
 
@@ -168,21 +207,19 @@ func TestWorker_TestStoppingAllContainers(t *testing.T) {
 
 func TestWorker_TestPausingDatabaseSavesSnapshot(t *testing.T) {
 	mockWorker, snapshotStorage := NewMockWorker(t, 31050, 2)
+	ctx := t.Context()
 
 	// Snapshot doesn't exist yet
-	exists, err := snapshotStorage.SnapshotExists(context.Background(), "first")
+	exists, err := snapshotStorage.SnapshotExists(ctx, "first")
 	require.NoError(t, err)
 	assert.False(t, exists, "expected no snapshot for database 'first'")
 
 	// Create and pause the databasee
-	require.NoError(t, mockWorker.CreateDatabase("first"))
-	require.NoError(t, mockWorker.PauseDatabase(context.Background(), "first"))
+	require.NoError(t, mockWorker.CreateDatabase(ctx, "first"))
+	require.NoError(t, mockWorker.PauseDatabase(ctx, "first"))
 
 	// Snapshot should now exist
-	exists, err = snapshotStorage.SnapshotExists(context.Background(), "first")
+	exists, err = snapshotStorage.SnapshotExists(ctx, "first")
 	require.NoError(t, err)
 	assert.True(t, exists, "expected snapshot for database 'first' after pausing")
-}
-
-func TestWorker_TestResumingDatabaseLoadsSnapshot(t *testing.T) {
 }
