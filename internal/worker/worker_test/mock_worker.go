@@ -4,6 +4,7 @@ import (
 	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/worker"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,7 @@ func NewMockWorker(t *testing.T, minPort, poolSize int) (*worker.Worker, *snapsh
 	worker, err := worker.NewWorker(t.Context(), "test", minPort, poolSize, mockSnapshotStorage)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		if err := worker.StopAllContainers(t.Context()); err != nil {
+		if err := worker.StopAllContainers(context.Background()); err != nil {
 			t.Errorf("stopping containers failed")
 		}
 	})
