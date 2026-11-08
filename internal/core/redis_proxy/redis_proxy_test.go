@@ -38,7 +38,7 @@ func TestRedisProxy_TestSetAndGet(t *testing.T) {
 	defer mockWorker.DeleteDatabase(ctx, databaseID)
 
 	const proxyAddr = "127.0.0.1:6400"
-	startProxy(mockWorker, proxyAddr)
+	startProxy(ctx, mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     proxyAddr,
@@ -64,7 +64,7 @@ func TestRedisProxy_TestDynamicRouting(t *testing.T) {
 	mockWorker, _ := worker_test.NewMockWorker(t, 31130, 5)
 
 	const proxyAddr = "127.0.0.1:6430"
-	startProxy(mockWorker, proxyAddr)
+	startProxy(ctx, mockWorker, proxyAddr)
 
 	databaseIDs := []string{"routing-a", "routing-b", "routing-c"}
 	directAddrs := map[string]string{}
@@ -118,7 +118,7 @@ func TestRedisProxy_TestNoAuth(t *testing.T) {
 	defer mockWorker.DeleteDatabase(ctx, databaseID)
 
 	const proxyAddr = "127.0.0.1:6420"
-	startProxy(mockWorker, proxyAddr)
+	startProxy(ctx, mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{Addr: proxyAddr})
 	defer rdb.Close()
@@ -136,7 +136,7 @@ func TestRedisProxy_TestResumesPausedDatabase(t *testing.T) {
 	defer mockWorker.DeleteDatabase(ctx, databaseID)
 
 	const proxyAddr = "127.0.0.1:6440"
-	startProxy(mockWorker, proxyAddr)
+	startProxy(ctx, mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseID})
 	defer rdb.Close()
