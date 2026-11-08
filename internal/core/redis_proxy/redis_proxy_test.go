@@ -32,7 +32,7 @@ func TestRedisProxy_TestSetAndGet(t *testing.T) {
 	mockWorker, _ := worker_test.NewMockWorker(t, 31100, 1)
 
 	const databaseId = "proxy-set-get"
-	err := mockWorker.CreateDatabase(databaseId)
+	err := mockWorker.CreateDatabase(ctx, databaseId)
 	require.NoError(t, err, "failed to create database")
 	defer mockWorker.DeleteDatabase(ctx, databaseId)
 
@@ -68,7 +68,7 @@ func TestRedisProxy_TestDynamicRouting(t *testing.T) {
 	databaseIds := []string{"routing-a", "routing-b", "routing-c"}
 	directAddrs := map[string]string{}
 	for _, id := range databaseIds {
-		err := mockWorker.CreateDatabase(id)
+		err := mockWorker.CreateDatabase(ctx, id)
 		require.NoError(t, err, "failed to create database %s", id)
 		defer mockWorker.DeleteDatabase(ctx, id)
 		addr, err := mockWorker.DatabaseAddress(id)
@@ -112,7 +112,7 @@ func TestRedisProxy_TestNoAuth(t *testing.T) {
 	mockWorker, _ := worker_test.NewMockWorker(t, 31120, 1)
 
 	const databaseId = "proxy-no-auth"
-	err := mockWorker.CreateDatabase(databaseId)
+	err := mockWorker.CreateDatabase(ctx, databaseId)
 	require.NoError(t, err, "failed to create database")
 	defer mockWorker.DeleteDatabase(ctx, databaseId)
 
@@ -130,7 +130,7 @@ func TestRedisProxy_TestResumesPausedDatabase(t *testing.T) {
 	mockWorker, _ := worker_test.NewMockWorker(t, 31140, 1)
 
 	const databaseId = "proxy-resume"
-	err := mockWorker.CreateDatabase(databaseId)
+	err := mockWorker.CreateDatabase(ctx, databaseId)
 	require.NoError(t, err, "failed to create database")
 	defer mockWorker.DeleteDatabase(ctx, databaseId)
 
@@ -147,7 +147,7 @@ func TestRedisProxy_TestResumesPausedDatabase(t *testing.T) {
 	require.Error(t, utils.WaitForRedis(ctx, rdb, 2)) // Should not reconnect
 	
 	// Now resume the database again
-	require.NoError(t, mockWorker.ResumeDatabase(databaseId))
+	require.NoError(t, mockWorker.ResumeDatabase(ctx, databaseId))
 
 	// A new connection to the paused database should resume it with its data intact
 	resumed := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseId})

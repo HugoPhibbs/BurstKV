@@ -41,7 +41,7 @@ func (s *GRPCServer) CreateDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	err := s.worker.CreateDatabase(req.GetDatabaseId())
+	err := s.worker.CreateDatabase(ctx, req.GetDatabaseId())
 	if err != nil {
 		return nil,toStatus(err)
 	}
@@ -54,7 +54,7 @@ func (s *GRPCServer) ResumeDatabase(ctx context.Context, req *pb.DatabaseRequest
 	if err := requestHasDatabaseID(req); err != nil {
 		return nil, err
 	}
-	err := s.worker.ResumeDatabase(req.GetDatabaseId())
+	err := s.worker.ResumeDatabase(ctx, req.GetDatabaseId())
 	if err != nil {
 		return nil,toStatus(err)
 	}

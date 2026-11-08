@@ -22,7 +22,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	workerID := flag.String("id", "default-WID", "Worker ID")
+	workerID := flag.String("id", "default", "Worker ID")
 	proxyPort := flag.Int("proxy-port", 6380, "Redis Proxy port")
 	grpcPort := flag.Int("grpc-port", 6381, "Worker GRPC port")
 	snapshotStorageAddress := flag.String("storage-address", "localhost:9000", "Snapshot storage address")
@@ -38,7 +38,7 @@ func main() {
 	minIoCreds := credentials.NewStaticV4(*accessKey, *secretKey, "")
 	snapShotStorage := snapshot_storage.NewSnapshotStorage(*snapshotStorageAddress, "snapshots", minIoCreds, false)
 
-	worker, err := worker.NewWorker(*workerID, *minContainerPort, *poolSize, snapShotStorage)
+	worker, err := worker.NewWorker(ctx, *workerID, *minContainerPort, *poolSize, snapShotStorage)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,5 +64,5 @@ func main() {
 	<-ctx.Done() // Wait for SIGINT or SIGTERM
 	stop()       // A second ctrl+c or SIGTERM will exit immediately.
 	log.Println("Shutting down gracefully... (press Ctrl+C again to force exit - NB: Not recommended)")
-	worker.StopAllContainers()
+	worker.StopAllContainers(ctx)
 }

@@ -41,7 +41,7 @@ func (w *ControlledWorker) DeleteDatabase(ctx context.Context ,databaseID string
 }
 
 func (w *ControlledWorker) CreateDatabase(ctx context.Context, databaseID string) error {
-	_, err := w.client.CreateDatabase(context.Background(), &workerpb.DatabaseRequest{
+	_, err := w.client.CreateDatabase(ctx, &workerpb.DatabaseRequest{
 		DatabaseId: databaseID,
 	})
 	return err

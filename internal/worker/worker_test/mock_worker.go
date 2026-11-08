@@ -12,11 +12,11 @@ import (
 func NewMockWorker(t *testing.T, minPort, poolSize int) (*worker.Worker, *snapshot_storage.SnapshotStorage) {
 	t.Helper()
 	mockSnapshotStorage := snapshot_storage_test.NewMockSnapshotStorage(t)
-	worker, err := worker.NewWorker("test", minPort, poolSize, mockSnapshotStorage)
+	worker, err := worker.NewWorker(t.Context(), "test", minPort, poolSize, mockSnapshotStorage)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		if _, err := worker.StopAllContainers(); err != nil {
-			t.Errorf("stopping containers: %v", err)
+		if err := worker.StopAllContainers(t.Context()); err != nil {
+			t.Errorf("stopping containers failed")
 		}
 	})
 	return worker, mockSnapshotStorage
