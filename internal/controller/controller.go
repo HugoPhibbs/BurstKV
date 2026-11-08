@@ -118,14 +118,6 @@ func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 	return nil
 }
 
-func (c *Controller) workerForDatabase(databaseID string) *controlled_worker.ControlledWorker {
-	database, exists := c.databases[databaseID]
-	if !exists {
-		return nil
-	}
-	return c.workers[database.WorkerID()]
-}
-
 // Pauses the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyPaused if the database is already paused.
 func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error {
