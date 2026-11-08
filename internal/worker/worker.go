@@ -234,12 +234,10 @@ func (w *Worker) DeleteDatabase(ctx context.Context, databaseID string) error {
 func (w *Worker) StopAllContainers(ctx context.Context) error {
 	var eg errgroup.Group
 	
-	// Delete assigned containers
 	for databaseID, container := range w.assigned.All() {
 		eg.Go(func() error {
 			if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
-				fmt.Printf("Failed to save snapshot for database %s: %v\n", databaseID, err)
-				return err
+				panic(fmt.Sprintf("Failed to save snapshot for database %s: %v\n", databaseID, err))
 			}
 			if err := w.deleteContainer(container); err != nil {
 				return err
@@ -249,32 +247,26 @@ func (w *Worker) StopAllContainers(ctx context.Context) error {
 		})
 	}
 
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-
 	// Delete un-assigned containers
 	for {
 		select {
 		case container := <-w.containerPool:
-			if err := w.deleteContainer(container); err != nil {
-				return err
-			}
+			eg.Go(func() error { return w.deleteContainer(container) })
 		default:
-			return nil
+			return eg.Wait()
 		}
 	}
 }
 
 // Deletes the database's container creates a fresh one
 func (w *Worker) releaseContainer(databaseID string, container *DatabaseContainer) error {
-	if err := w.deleteContainer(container); err != nil {
-		return err
+	if errChan := w.deleteContainer(container); errChan != nil {
+		return errChan
 	}
 	w.assigned.Delete(databaseID)
 
-	_, err := w.createContainer(container.port)
-	return err
+	_, errChan := w.createContainer(container.port)
+	return errChan
 }
 
 func (w *Worker) DatabaseAddress(databaseID string) (string, error) {
