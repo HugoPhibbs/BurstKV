@@ -6,11 +6,13 @@ import (
 	"burstkv/internal/worker"
 	"burstkv/internal/worker/grpc"
 	"context"
+	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
+
+	"flag"
 
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -20,33 +22,40 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	storagePort := "9000"
-	accessKey := "test-ak"
-	secretKey := "test-sk"
-	exec.CommandContext(ctx, "python", "scripts/start_dev_snapshot_server.py", "--api-port", storagePort, "--access-key", accessKey, "--secret-key", secretKey).Start()
+	workerID := flag.String("id", "default", "Worker ID")
+	proxyPort := flag.Int("proxy-port", 6380, "Redis Proxy port")
+	grpcPort := flag.Int("grpc-port", 6381, "Worker GRPC port")
+	snapshotStorageAddress := flag.String("storage-address", "localhost:9000", "Snapshot storage address")
 
-	storageAddr := "localhost:" + storagePort
-	minIoCreds := credentials.NewStaticV4(accessKey, secretKey, "")
-	snapShotStorage := snapshot_storage.NewSnapshotStorage(storageAddr, "snapshots", minIoCreds, false)
+	accessKey := flag.String("access-key", "default-ak", "Snapshot storage Access Key")
+	secretKey := flag.String("secret-key", "default-sk", "Snapshot storage Secret Key")
 
-	worker, err := worker.NewWorker("worker-1", 30000, 10, snapShotStorage)
+	minContainerPort := flag.Int("min-port", 30000, "Minimum container port")
+	poolSize := flag.Int("pool-size", 10, "Size of the container pool")
+
+	flag.Parse()
+
+	minIoCreds := credentials.NewStaticV4(*accessKey, *secretKey, "")
+	snapShotStorage := snapshot_storage.NewSnapshotStorage(*snapshotStorageAddress, "snapshots", minIoCreds, false)
+
+	worker, err := worker.NewWorker(ctx, *workerID, *minContainerPort, *poolSize, snapShotStorage)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	proxy := redis_proxy.NewRedisProxy(":6380", worker)
-
 	go func() {
-		log.Default().Println("Redis proxy listening on :6380")
-		if err := proxy.ListenAndServe(); err != nil {
+		proxyAddr := fmt.Sprintf(":%d", *proxyPort)
+		log.Default().Println("Redis proxy listening on " + proxyAddr)
+		if err := redis_proxy.NewRedisProxy(proxyAddr, worker).ListenAndServe(); err != nil {
 			log.Println(err)
 			stop()
 		}
 	}()
-
+		
 	go func() {
-		log.Println("worker gRPC listening on :50051")
-		if err := grpc.New(worker).ListenAndServe(":50051"); err != nil {
+		grpcAddr := fmt.Sprintf(":%d", *grpcPort)
+		log.Println("worker gRPC listening on " + grpcAddr)
+		if err := grpc.New(worker).ListenAndServe(grpcAddr); err != nil {
 			log.Println(err)
 			stop()
 		}
@@ -55,5 +64,5 @@ func main() {
 	<-ctx.Done() // Wait for SIGINT or SIGTERM
 	stop()       // A second ctrl+c or SIGTERM will exit immediately.
 	log.Println("Shutting down gracefully... (press Ctrl+C again to force exit - NB: Not recommended)")
-	worker.StopAllContainers()
+	worker.StopAllContainers(ctx)
 }

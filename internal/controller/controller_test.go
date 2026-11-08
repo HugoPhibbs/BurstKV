@@ -41,7 +41,7 @@ func newTestController(t *testing.T, idleLimit time.Duration, grpcPort, minPort,
 
 	remoteWorker, snapshotStorage := worker_test.NewMockWorker(t, minPort, poolSize)
 	t.Cleanup(func() {
-		if _, err := remoteWorker.StopAllContainers(); err != nil {
+		if remoteWorker.StopAllContainers(ctx) != nil {
 			t.Errorf("stopping containers: %v", err)
 		}
 	})
@@ -66,7 +66,7 @@ func redisConnect(t *testing.T, w *worker.Worker, databaseID string) *redis.Clie
 	require.NoError(t, err)
 	rdb := redis.NewClient(&redis.Options{Addr: addr, Password: databaseID})
 	t.Cleanup(func() { rdb.Close() })
-	require.NoError(t, utils.WaitForRedis(context.Background(), rdb, 5))
+	require.NoError(t, utils.WaitForRedis(t.Context(), rdb, 5))
 	return rdb
 }
 
