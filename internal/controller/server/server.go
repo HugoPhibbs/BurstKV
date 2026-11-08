@@ -20,8 +20,8 @@ func New(ctrl *controller.Controller) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"databases": databases})
 	})
 
-	router.GET("/database/:databaseId", func(c *gin.Context) {
-		state, err := ctrl.GetDatabaseState(c.Param("databaseId"))
+	router.GET("/database/:databaseID", func(c *gin.Context) {
+		state, err := ctrl.GetDatabaseState(c.Param("databaseID"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -34,24 +34,24 @@ func New(ctrl *controller.Controller) *gin.Engine {
 	})
 
 	router.POST("/database", func(c *gin.Context) {
-		databaseId, err := ctrl.CreateDatabase(c.Request.Context())
+		databaseID, err := ctrl.CreateDatabase(c.Request.Context())
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"databaseId": databaseId})
+		c.JSON(http.StatusOK, gin.H{"databaseID": databaseID})
 	})
 
-	router.DELETE("/database/delete/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.DeleteDatabase(c.Request.Context(), c.Param("databaseId")))
+	router.DELETE("/database/delete/:databaseID", func(c *gin.Context) {
+		writeResult(c, ctrl.DeleteDatabase(c.Request.Context(), c.Param("databaseID")))
 	})
 
-	router.POST("/database/pause/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.PauseDatabase(c.Request.Context(), c.Param("databaseId")))
+	router.POST("/database/pause/:databaseID", func(c *gin.Context) {
+		writeResult(c, ctrl.PauseDatabase(c.Request.Context(), c.Param("databaseID")))
 	})
 
-	router.POST("/database/resume/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.ResumeDatabase(c.Request.Context(), c.Param("databaseId")))
+	router.POST("/database/resume/:databaseID", func(c *gin.Context) {
+		writeResult(c, ctrl.ResumeDatabase(c.Request.Context(), c.Param("databaseID")))
 	})
 
 	return router

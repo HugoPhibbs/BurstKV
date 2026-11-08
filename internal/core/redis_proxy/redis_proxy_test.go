@@ -31,17 +31,17 @@ func TestRedisProxy_TestSetAndGet(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31100, 1)
 
-	const databaseId = "proxy-set-get"
-	err := mockWorker.CreateDatabase(ctx, databaseId)
+	const databaseID = "proxy-set-get"
+	err := mockWorker.CreateDatabase(ctx, databaseID)
 	require.NoError(t, err, "failed to create database")
-	defer mockWorker.DeleteDatabase(ctx, databaseId)
+	defer mockWorker.DeleteDatabase(ctx, databaseID)
 
 	const proxyAddr = "127.0.0.1:6400"
 	startProxy(mockWorker, proxyAddr)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     proxyAddr,
-		Password: databaseId,
+		Password: databaseID,
 	})
 	defer rdb.Close()
 
@@ -65,9 +65,9 @@ func TestRedisProxy_TestDynamicRouting(t *testing.T) {
 	const proxyAddr = "127.0.0.1:6430"
 	startProxy(mockWorker, proxyAddr)
 
-	databaseIds := []string{"routing-a", "routing-b", "routing-c"}
+	databaseIDs := []string{"routing-a", "routing-b", "routing-c"}
 	directAddrs := map[string]string{}
-	for _, id := range databaseIds {
+	for _, id := range databaseIDs {
 		err := mockWorker.CreateDatabase(ctx, id)
 		require.NoError(t, err, "failed to create database %s", id)
 		defer mockWorker.DeleteDatabase(ctx, id)
@@ -77,14 +77,14 @@ func TestRedisProxy_TestDynamicRouting(t *testing.T) {
 	}
 
 	// Same key, a different value per database, all through the one proxy
-	for _, id := range databaseIds {
+	for _, id := range databaseIDs {
 		rdb := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: id})
 		defer rdb.Close()
 		require.NoError(t, utils.WaitForRedis(ctx, rdb, 10))
 		require.NoError(t, rdb.Set(ctx, "shared_key", "value-"+id, 0).Err())
 	}
 
-	for _, id := range databaseIds {
+	for _, id := range databaseIDs {
 		// Read back through the proxy
 		viaProxy := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: id})
 		defer viaProxy.Close()
@@ -111,10 +111,10 @@ func TestRedisProxy_TestNoAuth(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31120, 1)
 
-	const databaseId = "proxy-no-auth"
-	err := mockWorker.CreateDatabase(ctx, databaseId)
+	const databaseID = "proxy-no-auth"
+	err := mockWorker.CreateDatabase(ctx, databaseID)
 	require.NoError(t, err, "failed to create database")
-	defer mockWorker.DeleteDatabase(ctx, databaseId)
+	defer mockWorker.DeleteDatabase(ctx, databaseID)
 
 	const proxyAddr = "127.0.0.1:6420"
 	startProxy(mockWorker, proxyAddr)
@@ -129,33 +129,33 @@ func TestRedisProxy_TestResumesPausedDatabase(t *testing.T) {
 	ctx := t.Context()
 	mockWorker, _ := worker_test.NewMockWorker(t, 31140, 1)
 
-	const databaseId = "proxy-resume"
-	err := mockWorker.CreateDatabase(ctx, databaseId)
+	const databaseID = "proxy-resume"
+	err := mockWorker.CreateDatabase(ctx, databaseID)
 	require.NoError(t, err, "failed to create database")
-	defer mockWorker.DeleteDatabase(ctx, databaseId)
+	defer mockWorker.DeleteDatabase(ctx, databaseID)
 
 	const proxyAddr = "127.0.0.1:6440"
 	startProxy(mockWorker, proxyAddr)
 
-	rdb := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseId})
+	rdb := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseID})
 	defer rdb.Close()
 	require.NoError(t, utils.WaitForRedis(ctx, rdb, 10))
 	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
-	
+
 	// Now pause the database
-	require.NoError(t, mockWorker.PauseDatabase(ctx, databaseId), "failed to pause database")
+	require.NoError(t, mockWorker.PauseDatabase(ctx, databaseID), "failed to pause database")
 	require.Error(t, utils.WaitForRedis(ctx, rdb, 2)) // Should not reconnect
-	
+
 	// Now resume the database again
-	require.NoError(t, mockWorker.ResumeDatabase(ctx, databaseId))
+	require.NoError(t, mockWorker.ResumeDatabase(ctx, databaseID))
 
 	// A new connection to the paused database should resume it with its data intact
-	resumed := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseId})
+	resumed := redis.NewClient(&redis.Options{Addr: proxyAddr, Password: databaseID})
 	defer resumed.Close()
 	require.NoError(t, utils.WaitForRedis(ctx, resumed, 10))
 
 	val, err := resumed.Get(ctx, "test_key").Result()
 	require.NoError(t, err)
 	assert.Equal(t, "test_value", val)
-	assert.Contains(t, mockWorker.AssignedDatabases(), databaseId)
+	assert.Contains(t, mockWorker.AssignedDatabases(), databaseID)
 }

@@ -15,7 +15,7 @@ import (
 const maxFirstCommandSize = 1024
 
 type activityReader struct {
-	r io.Reader
+	r              io.Reader
 	recordActivity func()
 }
 
@@ -28,8 +28,8 @@ func (ar *activityReader) Read(p []byte) (int, error) {
 }
 
 type Router interface {
-	RouteDatabase(databaseId string) (string, error)
-	RecordDatabaseActivity(databaseId string)
+	RouteDatabase(databaseID string) (string, error)
+	RecordDatabaseActivity(databaseID string)
 }
 
 type RedisProxy struct {
@@ -68,13 +68,13 @@ func (p *RedisProxy) handle(client net.Conn) {
 		return
 	}
 
-	databaseId := databaseIdFromCommand(cmd)
-	if databaseId == "" {
+	databaseID := databaseIDFromCommand(cmd)
+	if databaseID == "" {
 		io.WriteString(client, "-NOAUTH connect with redis://:<db-id>@host:port\r\n")
 		return
 	}
 
-	addr, err := p.router.RouteDatabase(databaseId)
+	addr, err := p.router.RouteDatabase(databaseID)
 	if err != nil {
 		io.WriteString(client, "-ERR "+err.Error()+"\r\n")
 		return
@@ -82,13 +82,13 @@ func (p *RedisProxy) handle(client net.Conn) {
 
 	upstream, err := net.Dial("tcp", addr)
 	if err != nil {
-		log.Printf("proxy: dial %s for database %s: %v", addr, databaseId, err)
+		log.Printf("proxy: dial %s for database %s: %v", addr, databaseID, err)
 		io.WriteString(client, "-ERR database unavailable\r\n")
 		return
 	}
 	defer upstream.Close()
 
-	recordActivity := func() { p.router.RecordDatabaseActivity(databaseId) }
+	recordActivity := func() { p.router.RecordDatabaseActivity(databaseID) }
 	done := make(chan struct{}, 2)
 	pipe := func(dst io.Writer, src io.Reader) {
 		io.Copy(dst, src)
@@ -100,7 +100,7 @@ func (p *RedisProxy) handle(client net.Conn) {
 }
 
 // The database ID is the password in AUTH <pass>, AUTH <user> <pass>, or HELLO <ver> AUTH <user> <pass>.
-func databaseIdFromCommand(cmd []string) string {
+func databaseIDFromCommand(cmd []string) string {
 	if len(cmd) == 0 {
 		return ""
 	}
