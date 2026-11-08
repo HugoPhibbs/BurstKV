@@ -42,6 +42,24 @@
             "type": "shell",
             "command": "go test ./... -v",
             "problemMatcher": []
+        },
+        {
+            "label": "Build worker image",
+            "type": "shell", 
+            "command": "python scripts/worker_config.py --build",
+            "problemMatcher": []
+        }, 
+        {
+            "label": "Run worker container",
+            "type": "shell",
+            "command": "python scripts/worker_config.py --start",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build + Run worker container",
+            "dependsOn": ["Build worker image", "Run worker container"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
         }
     ]
 }
