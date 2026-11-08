@@ -3,6 +3,7 @@ package redis_proxy
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -28,8 +29,8 @@ func (ar *activityReader) Read(p []byte) (int, error) {
 }
 
 type Router interface {
-	RouteDatabase(databaseID string) (string, error)
-	RecordDatabaseActivity(databaseID string)
+	RouteDatabase(ctx context.Context, databaseID string) (string, error)
+	RecordDatabaseActivity(databaseID string) error
 }
 
 type RedisProxy struct {
@@ -42,7 +43,7 @@ func NewRedisProxy(listenAddr string, router Router) *RedisProxy {
 }
 
 // Listens on listenAddr and proxies every connection. Blocks.
-func (p *RedisProxy) ListenAndServe() error {
+func (p *RedisProxy) ListenAndServe(ctx context.Context) error {
 	ln, err := net.Listen("tcp", p.listenAddr)
 	if err != nil {
 		return err
@@ -54,11 +55,11 @@ func (p *RedisProxy) ListenAndServe() error {
 		if err != nil {
 			return err
 		}
-		go p.handle(client)
+		go p.handle(ctx, client)
 	}
 }
 
-func (p *RedisProxy) handle(client net.Conn) {
+func (p *RedisProxy) handle(ctx context.Context, client net.Conn) {
 	defer client.Close()
 
 	// Everything read while parsing is copied into `first`, so it can be replayed upstream as-is.
@@ -74,7 +75,7 @@ func (p *RedisProxy) handle(client net.Conn) {
 		return
 	}
 
-	addr, err := p.router.RouteDatabase(databaseID)
+	addr, err := p.router.RouteDatabase(ctx, databaseID)
 	if err != nil {
 		io.WriteString(client, "-ERR "+err.Error()+"\r\n")
 		return
@@ -88,7 +89,11 @@ func (p *RedisProxy) handle(client net.Conn) {
 	}
 	defer upstream.Close()
 
-	recordActivity := func() { p.router.RecordDatabaseActivity(databaseID) }
+	recordActivity := func() { 
+		if err := p.router.RecordDatabaseActivity(databaseID); err != nil {
+			log.Println(err)
+		}
+	}
 	done := make(chan struct{}, 2)
 	pipe := func(dst io.Writer, src io.Reader) {
 		io.Copy(dst, src)

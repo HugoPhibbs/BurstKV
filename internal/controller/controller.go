@@ -13,7 +13,6 @@ import (
 )
 
 const DB_ID_LENGTH = 8
-const DEFAULT_REAPER_TIME_INTERVAL = 1 * time.Minute
 
 type Controller struct {
 	idleLimit          time.Duration
@@ -24,13 +23,13 @@ type Controller struct {
 }
 
 // Creates a new DBManager with the given runtime and idle limit
-func NewController(idleLimit time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage) *Controller {
+func NewController(idleLimit, reaperInterval time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage) *Controller {
 	return &Controller{
 		idleLimit:          idleLimit,
-		ReaperTimeInterval: DEFAULT_REAPER_TIME_INTERVAL,
+		ReaperTimeInterval: reaperInterval,
 		workers:            make(map[string]*controlled_worker.ControlledWorker),
 		databases:          make(map[string]*database.Database),
-		snapShotstorage: snapshotStorage,
+		snapShotstorage:    snapshotStorage,
 	}
 }
 
@@ -51,8 +50,8 @@ func (c *Controller) AddWorker(ctx context.Context, worker *controlled_worker.Co
 }
 
 // Returns the state of the database with the given ID.
-func (c *Controller) GetDatabaseState(databaseId string) (database.DatabaseStatus, error) {
-	foundDatabase, exists := c.databases[databaseId]
+func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatus, error) {
+	foundDatabase, exists := c.databases[databaseID]
 	if !exists {
 		return database.NotFound, nil
 	}
@@ -86,23 +85,23 @@ func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
 
 // Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
-func (c *Controller) DeleteDatabase(ctx context.Context, databaseId string) error {
-	if database, exists := c.databases[databaseId]; exists {
+func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) error {
+	if database, exists := c.databases[databaseID]; exists {
 		isRunning := database.IsRunning()
 		if isRunning {
 			worker, ok := c.workers[database.WorkerID()]
 			if !ok {
 				panic("Invalid state: Database is assigned to a worker, yet the worker doesn't contain the database")
 			}
-			err := worker.DeleteDatabase(ctx, databaseId)
+			err := worker.DeleteDatabase(ctx, databaseID)
 			if err != nil {
 				return err
 			}
 		} else {
-			c.snapShotstorage.DeleteSnapshot(ctx, databaseId)
+			c.snapShotstorage.DeleteSnapshot(ctx, databaseID)
 		}
 
-		delete(c.databases, databaseId)
+		delete(c.databases, databaseID)
 		return nil
 	}
 	return ErrDatabaseNotFound
@@ -119,17 +118,8 @@ func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 	return nil
 }
 
-func (c *Controller) RecordDatabaseActivity(databaseId string) error {
-	database, exists := c.databases[databaseId]
-	if !exists {
-		return ErrDatabaseNotFound
-	}
-	database.RecordActivity()
-	return nil
-}
-
-func (c *Controller) workerForDatabase(databaseId string) *controlled_worker.ControlledWorker {
-	database, exists := c.databases[databaseId]
+func (c *Controller) workerForDatabase(databaseID string) *controlled_worker.ControlledWorker {
+	database, exists := c.databases[databaseID]
 	if !exists {
 		return nil
 	}
@@ -138,15 +128,15 @@ func (c *Controller) workerForDatabase(databaseId string) *controlled_worker.Con
 
 // Pauses the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyPaused if the database is already paused.
-func (c *Controller) PauseDatabase(ctx context.Context, databaseId string) error {
-	database, exists := c.databases[databaseId]
+func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error {
+	database, exists := c.databases[databaseID]
 	if !exists {
 		return ErrDatabaseNotFound
 	}
 	if !database.IsRunning() {
 		return ErrDatabaseAlreadyPaused
 	}
-	if err := c.workers[database.WorkerID()].PauseDatabase(ctx, databaseId); err != nil {
+	if err := c.workers[database.WorkerID()].PauseDatabase(ctx, databaseID); err != nil {
 		return err
 	}
 	database.RemoveWorker()
@@ -155,8 +145,8 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseId string) error
 
 // Resumes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyActive if the database is already active.
-func (c *Controller) ResumeDatabase(ctx context.Context, databaseId string) error {
-	database, exists := c.databases[databaseId]
+func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) error {
+	database, exists := c.databases[databaseID]
 	if !exists {
 		return ErrDatabaseNotFound
 	}
@@ -169,7 +159,7 @@ func (c *Controller) ResumeDatabase(ctx context.Context, databaseId string) erro
 	if worker == nil {
 		return ErrNoAvailableWorkers
 	}
-	err := worker.ResumeDatabase(ctx, databaseId)
+	err := worker.ResumeDatabase(ctx, databaseID)
 	if err != nil {
 		return err
 	}
@@ -206,4 +196,36 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 			c.reapIdleDatabases(ctx)
 		}
 	}()
+}
+
+func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
+    database, exists := c.databases[databaseID]
+    if !exists {
+        return "", ErrDatabaseNotFound
+    }
+
+    if !database.IsRunning() {
+        if err := c.ResumeDatabase(ctx, databaseID); err != nil {
+            return "", err
+        }
+    }
+
+    worker, exists := c.workers[database.WorkerID()]
+    if !exists {
+        return "", fmt.Errorf("database %s linked to unknown worker %s", databaseID, database.WorkerID())
+    }
+    return worker.ProxyAddress, nil
+}
+
+func (c *Controller) RecordDatabaseActivity(databaseID string) error {
+	database, exists := c.databases[databaseID]
+	if !exists {
+		return ErrDatabaseNotFound
+	}
+	database.RecordActivity()
+	return nil
+}
+
+func (c *Controller) StopAllWorkers() error {
+	return nil // Implement me
 }

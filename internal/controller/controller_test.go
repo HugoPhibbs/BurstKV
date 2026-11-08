@@ -47,14 +47,14 @@ func newTestController(t *testing.T, idleLimit time.Duration, grpcPort, minPort,
 	})
 
 	go workergrpc.New(remoteWorker).ListenAndServe(grpcAddr)
-	waitCtx, cancel := context.WithTimeout(ctx, 10 * time.Second)
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	require.NoError(t, controlledWorker.WaitUntilRPCIsReady(waitCtx))
 
 	require.NoError(t, err)
 	t.Cleanup(func() { controlledWorker.RPCConnection.Close() })
 
-	c := NewController(idleLimit, snapshotStorage)
+	c := NewController(idleLimit, 60*time.Second, snapshotStorage)
 	c.AddWorker(ctx, controlledWorker)
 	return c, remoteWorker
 }
@@ -184,8 +184,8 @@ func TestController_TestIdleDatabaseReaping(t *testing.T) {
 	require.Eventually(t, func() bool {
 		s, _ := c.GetDatabaseState(id)
 		return s == database.Paused
-	}, 10 * time.Second, 100 * time.Millisecond)
-	
+	}, 10*time.Second, 100*time.Millisecond)
+
 	state, err := c.GetDatabaseState(id)
 	require.NoError(t, err)
 	assert.Equal(t, database.Paused, state, "expected database state to be Paused after idle timeout")

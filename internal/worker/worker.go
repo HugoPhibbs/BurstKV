@@ -6,12 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+
 	"github.com/puzpuzpuz/xsync/v4"
 	"golang.org/x/sync/errgroup"
 )
 
 var REDIS_IMAGE = "redis:8.10.3"
-
 
 type DatabaseContainer struct {
 	containerID string
@@ -20,7 +20,7 @@ type DatabaseContainer struct {
 
 type Worker struct {
 	WorkerID        string
-	containerPool   chan *DatabaseContainer       // Containers not assigned to a database
+	containerPool   chan *DatabaseContainer // Containers not assigned to a database
 	assigned        *xsync.Map[string, *DatabaseContainer]
 	snapshotStorage *snapshot_storage.SnapshotStorage
 }
@@ -62,16 +62,16 @@ func (w *Worker) AvailableContainerCount() int {
 }
 
 func (w *Worker) AssignedDatabases() []string {
-    ids := make([]string, 0, w.assigned.Size())
-    for id := range w.assigned.All() {
-        ids = append(ids, id)
-    }
-    return ids
+	ids := make([]string, 0, w.assigned.Size())
+	for id := range w.assigned.All() {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (w *Worker) IsAssigned(databaseID string) bool {
 	_, exists := w.assigned.Load(databaseID)
-	return exists;
+	return exists
 }
 
 // Starts a new idle container on the given port.
@@ -229,11 +229,10 @@ func (w *Worker) DeleteDatabase(ctx context.Context, databaseID string) error {
 	return nil
 }
 
-
 // Removes all containers, assigned or not.
 func (w *Worker) StopAllContainers(ctx context.Context) error {
 	var eg errgroup.Group
-	
+
 	for databaseID, container := range w.assigned.All() {
 		eg.Go(func() error {
 			if err := w.saveSnapshot(ctx, databaseID, container.containerID); err != nil {
@@ -291,9 +290,11 @@ func (w *Worker) containerSnapshotPath(containerID string) string {
 }
 
 // Implements redis_proxy.Router: returns the address of a running database.
-func (w *Worker) RouteDatabase(databaseID string) (string, error) {
+func (w *Worker) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
 	return w.DatabaseAddress(databaseID)
 }
 
-// Implements redis_proxy.Router.
-func (w *Worker) RecordDatabaseActivity(databaseID string) {}
+// Implements redis_proxy.Router: (no-op)
+func (w *Worker) RecordDatabaseActivity(databaseID string) error {
+	return nil
+}

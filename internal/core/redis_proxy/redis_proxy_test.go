@@ -4,6 +4,7 @@ import (
 	"burstkv/internal/utils"
 	"burstkv/internal/worker"
 	"burstkv/internal/worker/worker_test"
+	"context"
 	"os"
 	"testing"
 
@@ -23,8 +24,8 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func startProxy(wm *worker.Worker, proxyAddr string) {
-	go NewRedisProxy(proxyAddr, wm).ListenAndServe()
+func startProxy(ctx context.Context, w *worker.Worker, proxyAddr string) {
+	go NewRedisProxy(proxyAddr, w).ListenAndServe(ctx)
 }
 
 func TestRedisProxy_TestSetAndGet(t *testing.T) {

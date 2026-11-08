@@ -35,3 +35,7 @@ func RandomString(n int) string {
 	}
 	return string(result)
 }
+
+func PortToLocalAddr(port int) string {
+	return fmt.Sprintf(":%d", port)
+}

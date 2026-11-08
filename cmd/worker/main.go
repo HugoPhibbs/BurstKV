@@ -46,7 +46,7 @@ func main() {
 	go func() {
 		proxyAddr := utils.PortToLocalAddr(*proxyPort)
 		log.Default().Println("Redis proxy listening on " + proxyAddr)
-		if err := redis_proxy.NewRedisProxy(proxyAddr, worker).ListenAndServe(); err != nil {
+		if err := redis_proxy.NewRedisProxy(proxyAddr, worker).ListenAndServe(ctx); err != nil {
 			log.Println(err)
 			stop()
 		}
