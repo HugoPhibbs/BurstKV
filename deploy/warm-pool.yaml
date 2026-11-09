@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: burstkv-warm
+spec:
+  replicas: 10
+  selector:
+    matchLabels: { burstkv/role: warm }
+  template:
+    metadata:
+      labels: { burstkv/role: warm }
+    spec:
+      containers:
+      - name: redis
+        image: redis:8.10.3
+        env:
+          - name: GRPC_PORT
+            value: "6379"
+          - name: GRPC_PORT
+            value: "6380"
+        resources:                       # request == limit → Guaranteed QoS
+          requests: { memory: 64Mi, cpu: 50m }
+          limits:   { memory: 64Mi, cpu: 50m }
+        resizePolicy:
+        - { resourceName: memory, restartPolicy: NotRequired }
