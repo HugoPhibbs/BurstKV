@@ -72,7 +72,7 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, controller.ErrDatabaseNotFound):
 		code = http.StatusNotFound
-	case errors.Is(err, controller.ErrNoAvailableWorkers):
+	case errors.Is(err, controller.ErrNoAvailablePods):
 		code = http.StatusServiceUnavailable
 	}
 	c.JSON(code, gin.H{"error": err.Error()})

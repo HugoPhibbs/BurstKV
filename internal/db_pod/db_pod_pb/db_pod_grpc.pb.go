@@ -19,17 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DBPod_CreateDatabase_FullMethodName = "/db_pod.DBPod/CreateDatabase"
-	DBPod_ResumeDatabase_FullMethodName = "/db_pod.DBPod/ResumeDatabase"
-	DBPod_Stop_FullMethodName           = "/db_pod.DBPod/Stop"
+	DBPod_Assign_FullMethodName = "/db_pod.DBPod/Assign"
+	DBPod_Stop_FullMethodName   = "/db_pod.DBPod/Stop"
 )
 
 // DBPodClient is the client API for DBPod service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DBPodClient interface {
-	CreateDatabase(ctx context.Context, in *AssignDatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
-	ResumeDatabase(ctx context.Context, in *AssignDatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
+	Assign(ctx context.Context, in *AssignDatabaseRequest, opts ...grpc.CallOption) (*Empty, error)
 	Stop(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
@@ -41,20 +39,10 @@ func NewDBPodClient(cc grpc.ClientConnInterface) DBPodClient {
 	return &dBPodClient{cc}
 }
 
-func (c *dBPodClient) CreateDatabase(ctx context.Context, in *AssignDatabaseRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *dBPodClient) Assign(ctx context.Context, in *AssignDatabaseRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, DBPod_CreateDatabase_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *dBPodClient) ResumeDatabase(ctx context.Context, in *AssignDatabaseRequest, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, DBPod_ResumeDatabase_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DBPod_Assign_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +63,7 @@ func (c *dBPodClient) Stop(ctx context.Context, in *StopRequest, opts ...grpc.Ca
 // All implementations must embed UnimplementedDBPodServer
 // for forward compatibility.
 type DBPodServer interface {
-	CreateDatabase(context.Context, *AssignDatabaseRequest) (*Empty, error)
-	ResumeDatabase(context.Context, *AssignDatabaseRequest) (*Empty, error)
+	Assign(context.Context, *AssignDatabaseRequest) (*Empty, error)
 	Stop(context.Context, *StopRequest) (*Empty, error)
 	mustEmbedUnimplementedDBPodServer()
 }
@@ -88,11 +75,8 @@ type DBPodServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDBPodServer struct{}
 
-func (UnimplementedDBPodServer) CreateDatabase(context.Context, *AssignDatabaseRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateDatabase not implemented")
-}
-func (UnimplementedDBPodServer) ResumeDatabase(context.Context, *AssignDatabaseRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResumeDatabase not implemented")
+func (UnimplementedDBPodServer) Assign(context.Context, *AssignDatabaseRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method Assign not implemented")
 }
 func (UnimplementedDBPodServer) Stop(context.Context, *StopRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Stop not implemented")
@@ -118,38 +102,20 @@ func RegisterDBPodServer(s grpc.ServiceRegistrar, srv DBPodServer) {
 	s.RegisterService(&DBPod_ServiceDesc, srv)
 }
 
-func _DBPod_CreateDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DBPod_Assign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AssignDatabaseRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DBPodServer).CreateDatabase(ctx, in)
+		return srv.(DBPodServer).Assign(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DBPod_CreateDatabase_FullMethodName,
+		FullMethod: DBPod_Assign_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DBPodServer).CreateDatabase(ctx, req.(*AssignDatabaseRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DBPod_ResumeDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AssignDatabaseRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DBPodServer).ResumeDatabase(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DBPod_ResumeDatabase_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DBPodServer).ResumeDatabase(ctx, req.(*AssignDatabaseRequest))
+		return srv.(DBPodServer).Assign(ctx, req.(*AssignDatabaseRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -180,12 +146,8 @@ var DBPod_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*DBPodServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateDatabase",
-			Handler:    _DBPod_CreateDatabase_Handler,
-		},
-		{
-			MethodName: "ResumeDatabase",
-			Handler:    _DBPod_ResumeDatabase_Handler,
+			MethodName: "Assign",
+			Handler:    _DBPod_Assign_Handler,
 		},
 		{
 			MethodName: "Stop",

@@ -1,52 +1,81 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/controller/domain/database"
 	"burstkv/internal/core/snapshot_storage"
+	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
 	"context"
 	"fmt"
+	"log"
 	"maps"
+	"os"
 	"slices"
+	"strings"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const DB_ID_LENGTH = 8
 
+type PodPorts struct {
+	rpcPort   string
+	proxyPort string
+}
+
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
-	workers            map[string]*controlled_worker.ControlledWorker // workerID -> Worker
-	databases          map[string]*database.Database                  // databaseID -> Database
+	k8s                kubernetes.Interface
+	k8sNameSpace       string
+	databases          map[string]*database.Database // databaseID -> Database
 	snapShotstorage    *snapshot_storage.SnapshotStorage
+	podPorts           *PodPorts
 }
 
 // Creates a new DBManager with the given runtime and idle limit
-func NewController(idleLimit, reaperInterval time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage) *Controller {
+func NewController(idleLimit, reaperInterval time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage, podPorts *PodPorts) (*Controller, error) {
+
+	k8s, err := newK8sInterface()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: reaperInterval,
-		workers:            make(map[string]*controlled_worker.ControlledWorker),
+		k8s:                k8s,
+		k8sNameSpace:       k8sNamespace(),
 		databases:          make(map[string]*database.Database),
 		snapShotstorage:    snapshotStorage,
-	}
+		podPorts:           podPorts,
+	}, nil
 }
 
-func (c *Controller) AddWorker(ctx context.Context, worker *controlled_worker.ControlledWorker) {
-	c.workers[worker.WorkerID] = worker
-
-	databaseIDs, err := worker.AssignedDatabases(ctx)
+func newK8sInterface() (kubernetes.Interface, error) {
+	cfg, err := rest.InClusterConfig()
+	if err == rest.ErrNotInCluster {
+		cfg, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+	}
 	if err != nil {
-		fmt.Printf("Error getting assigned databases from worker %s: %v\n", worker.WorkerID, err)
-		return
+		return nil, err
 	}
+	return kubernetes.NewForConfig(cfg)
+}
 
-	for _, id := range databaseIDs {
-		database := database.NewDatabase(id, worker.WorkerID)
-		c.databases[id] = database
-		database.RecordActivity() // TODO update this from the worker
+func k8sNamespace() string {
+	n, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "default"
 	}
+	return strings.TrimSpace(string(n))
 }
 
 // Returns the state of the database with the given ID.
@@ -66,45 +95,28 @@ func (c *Controller) GetAllDatabaseIDs() []string {
 	return slices.Collect(maps.Keys(c.databases))
 }
 
-// Creates a new database and returns the new database ID
-func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
-	for workerID, worker := range c.workers {
-		if worker.CanAssignDatabase(ctx) {
-			new_database_id := utils.RandomString(DB_ID_LENGTH)
-			err := worker.CreateDatabase(ctx, new_database_id)
-			if err != nil {
-				return "", err
-			}
-			new_database := database.NewDatabase(new_database_id, workerID)
-			c.databases[new_database_id] = new_database
-			return new_database_id, nil
-		}
-	}
-	return "", ErrNoAvailableWorkers
-}
-
 // Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
 func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) error {
-	if database, exists := c.databases[databaseID]; exists {
-		isRunning := database.IsRunning()
-		if isRunning {
-			worker, ok := c.workers[database.WorkerID()]
-			if !ok {
-				panic("Invalid state: Database is assigned to a worker, yet the worker doesn't contain the database")
-			}
-			err := worker.DeleteDatabase(ctx, databaseID)
-			if err != nil {
-				return err
-			}
-		} else {
-			c.snapShotstorage.DeleteSnapshot(ctx, databaseID)
-		}
+	foundDB, exists := c.databases[databaseID]
 
-		delete(c.databases, databaseID)
-		return nil
+	if !exists {
+		return ErrDatabaseNotFound
 	}
-	return ErrDatabaseNotFound
+
+	if foundDB.IsRunning() {
+		if err := c.stopDatabase(ctx, foundDB, false); err != nil {
+			return err
+		}
+	}
+
+	if err := c.snapShotstorage.DeleteSnapshot(ctx, databaseID); err != nil {
+		log.Println(fmt.Sprintf("Error occured when deleting a snapshot %v", err))
+	}
+
+	delete(c.databases, databaseID)
+
+	return nil
 }
 
 // Deletes all databases managed by this DBManager.
@@ -121,59 +133,116 @@ func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 // Pauses the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyPaused if the database is already paused.
 func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error {
-	database, exists := c.databases[databaseID]
+	foundDB, exists := c.databases[databaseID]
 	if !exists {
 		return ErrDatabaseNotFound
 	}
-	if !database.IsRunning() {
+	if !foundDB.IsRunning() {
 		return ErrDatabaseAlreadyPaused
 	}
-	if err := c.workers[database.WorkerID()].PauseDatabase(ctx, databaseID); err != nil {
+	return c.stopDatabase(ctx, foundDB, true)
+}
+
+func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
+	client, err := c.databaseRPClient(foundDB)
+	if err != nil {
 		return err
 	}
-	database.RemoveWorker()
+
+	_, err = client.Stop(ctx, &db_pod_pb.StopRequest{Save: save})
+
+	if err != nil {
+		return err
+	}
+
+	foundDB.Pod = nil
 	return nil
 }
 
 // Resumes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyActive if the database is already active.
 func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) error {
-	database, exists := c.databases[databaseID]
+	foundDB, exists := c.databases[databaseID]
+
 	if !exists {
 		return ErrDatabaseNotFound
 	}
 
-	if database.IsRunning() {
+	return c.assignDatabase(ctx, foundDB, false)
+}
+
+// Creates a new database and returns the new database ID
+func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
+	newDatabaseID := utils.RandomString(DB_ID_LENGTH)
+	newDB := database.NewDatabase(newDatabaseID)
+
+	if err := c.assignDatabase(ctx, newDB, true); err != nil {
+		return "", err
+	}
+
+	c.databases[newDatabaseID] = newDB
+	return newDatabaseID, nil
+}
+
+func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, create bool) error {
+	if DB.IsRunning() {
 		return ErrDatabaseAlreadyActive
 	}
 
-	worker := c.findAvailableWorker(ctx)
-	if worker == nil {
-		return ErrNoAvailableWorkers
-	}
-	err := worker.ResumeDatabase(ctx, databaseID)
+	pod, err := c.claimWarmPod(ctx)
 	if err != nil {
 		return err
 	}
-	database.AddWorker(worker.WorkerID)
-	return nil
+
+	DB.Pod = &database.Pod{PodName: pod.Name, PodIP: pod.Status.PodIP}
+	client, err := c.databaseRPClient(DB)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
+	return err
 }
 
-func (c *Controller) findAvailableWorker(ctx context.Context) *controlled_worker.ControlledWorker {
-	for _, worker := range c.workers {
-		if worker.CanAssignDatabase(ctx) {
-			return worker
+func (c *Controller) databaseRPClient(database *database.Database) (db_pod_pb.DBPodClient, error) {
+	conn, err := grpc.NewClient(database.Pod.PodIP+":"+c.podPorts.rpcPort,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	if err != nil {
+		return nil, err
+	}
+
+	client := db_pod_pb.NewDBPodClient(conn)
+	return client, nil
+}
+
+func (c *Controller) claimWarmPod(ctx context.Context) (*corev1.Pod, error) {
+	pods, err := c.k8s.CoreV1().Pods(c.k8sNameSpace).List(ctx, metav1.ListOptions{
+		LabelSelector: "burstkv/role=warm",
+		FieldSelector: "status.phase=Running",
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		pod.Labels["burstkv/role"] = "claimed"
+		// Update sends the pod's resourceVersion, so if two claims race,
+		// one gets a Conflict error and moves on to the next pod.
+		claimed, err := c.k8s.CoreV1().Pods(c.k8sNameSpace).Update(ctx, pod, metav1.UpdateOptions{})
+		if err == nil {
+			return claimed, nil
 		}
 	}
-	return nil
+	return nil, ErrNoAvailablePods
 }
 
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
 	for _, db := range c.databases {
 		if db.IsActiveAndIdle(c.idleLimit) {
-			err := c.PauseDatabase(ctx, db.Id())
+			err := c.PauseDatabase(ctx, db.ID())
 			if err != nil {
-				fmt.Printf("Error pausing idle database %s: %v\n", db.Id(), err)
+				fmt.Printf("Error pausing idle database %s: %v\n", db.ID(), err)
 			}
 		}
 	}
@@ -191,22 +260,18 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 }
 
 func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
-    database, exists := c.databases[databaseID]
-    if !exists {
-        return "", ErrDatabaseNotFound
-    }
+	database, exists := c.databases[databaseID]
+	if !exists {
+		return "", ErrDatabaseNotFound
+	}
 
-    if !database.IsRunning() {
-        if err := c.ResumeDatabase(ctx, databaseID); err != nil {
-            return "", err
-        }
-    }
+	if !database.IsRunning() {
+		if err := c.ResumeDatabase(ctx, databaseID); err != nil {
+			return "", err
+		}
+	}
 
-    worker, exists := c.workers[database.WorkerID()]
-    if !exists {
-        return "", fmt.Errorf("database %s linked to unknown worker %s", databaseID, database.WorkerID())
-    }
-    return worker.ProxyAddress, nil
+	return database.Pod.PodIP, nil
 }
 
 func (c *Controller) RecordDatabaseActivity(databaseID string) error {

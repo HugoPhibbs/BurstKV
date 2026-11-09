@@ -5,20 +5,24 @@ import (
 	"time"
 )
 
-type Database struct {
-	id             string
-	latestActivity atomic.Int64 // thread-safe
-	workerID       string
+type Pod struct {
+	PodName string
+	PodIP   string
 }
 
-func NewDatabase(id string, workerID string) *Database {
+type Database struct {
+	id             string
+	Pod            *Pod
+	latestActivity atomic.Int64 // thread-safe
+}
+
+func NewDatabase(id string) *Database {
 	return &Database{
-		id:       id,
-		workerID: workerID,
+		id: id,
 	}
 }
 
-func (db *Database) Id() string {
+func (db *Database) ID() string {
 	return db.id
 }
 
@@ -35,14 +39,7 @@ func (db *Database) LatestActivity() *time.Time {
 	return &t
 }
 
-func (db *Database) RemoveWorker() {
-	db.workerID = ""
-}
-
 func (db *Database) IsActiveAndIdle(idleLimit time.Duration) bool {
-	if db.workerID == "" {
-		return false
-	}
 	lastRequest := db.LatestActivity()
 	if lastRequest == nil {
 		return false
@@ -50,14 +47,6 @@ func (db *Database) IsActiveAndIdle(idleLimit time.Duration) bool {
 	return time.Since(*lastRequest) > idleLimit
 }
 
-func (db *Database) AddWorker(workerID string) {
-	db.workerID = workerID
-}
-
-func (db *Database) WorkerID() string {
-	return db.workerID
-}
-
 func (db *Database) IsRunning() bool {
-	return db.workerID != ""
+	return db.Pod != nil
 }

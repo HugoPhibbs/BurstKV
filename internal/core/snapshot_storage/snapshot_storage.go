@@ -89,16 +89,16 @@ func (s *SnapshotStorage) SnapshotExists(ctx context.Context, databaseID string)
 	return true, nil
 }
 
-func (s *SnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string) (bool, error) {
+func (s *SnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string) error {
 	objectName := s.snapshotObjectName(databaseID)
 	err := s.minioClient.RemoveObject(ctx, s.bucketName, objectName, minio.RemoveObjectOptions{})
 	if err != nil {
 		if minio.ToErrorResponse(err).Code == minio.NoSuchKey {
-			return false, nil
+			return ErrSnapshotNotFound
 		}
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 func (s *SnapshotStorage) NumSnapshots(ctx context.Context) (int, error) {
