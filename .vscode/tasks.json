@@ -46,15 +46,15 @@
         {
             "label": "Build db image",
             "type": "shell", 
-            "command": "docker build -f docker/Dockerfile.db_pod -t ${input:imageTag} .",
+            "command": "docker build -f docker/Dockerfile.db_pod -t burstkv-dbpod:${input:imageVersion} .",
             "problemMatcher": []
         },
     ],
     "inputs": [
         {
-            "id": "imageTag",
+            "id": "imageVersion",
             "type": "promptString",
-            "description": "Image tag",
+            "description": "Image version",
             "default": "latest"
         }
     ]
