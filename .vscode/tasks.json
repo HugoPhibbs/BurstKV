@@ -22,7 +22,7 @@
         {
             "label": "protoc: generate",
             "type": "shell",
-            "command": "protoc --go_out=. --go_opt=module=burstkv --go-grpc_out=. --go-grpc_opt=module=burstkv proto/worker.proto",
+            "command": "protoc --go_out=. --go_opt=module=burstkv --go-grpc_out=. --go-grpc_opt=module=burstkv proto/db_pod.proto",
             "problemMatcher": []
         },
         {
@@ -44,22 +44,18 @@
             "problemMatcher": []
         },
         {
-            "label": "Build worker image",
+            "label": "Build db image",
             "type": "shell", 
-            "command": "python scripts/worker_config.py --build",
-            "problemMatcher": []
-        }, 
-        {
-            "label": "Run worker container",
-            "type": "shell",
-            "command": "python scripts/worker_config.py --start",
+            "command": "docker build -f docker/Dockerfile.db_pod -t ${input:imageTag} .",
             "problemMatcher": []
         },
+    ],
+    "inputs": [
         {
-            "label": "Build + Run worker container",
-            "dependsOn": ["Build worker image", "Run worker container"],
-            "dependsOrder": "sequence",
-            "problemMatcher": []
+            "id": "imageTag",
+            "type": "promptString",
+            "description": "Image tag",
+            "default": "latest"
         }
     ]
 }
