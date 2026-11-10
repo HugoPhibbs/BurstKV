@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -99,6 +100,14 @@ func (s *SnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string)
 		return err
 	}
 	return nil
+}
+
+func (s *SnapshotStorage) PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
+	u, err := s.minioClient.PresignedPutObject(ctx, s.bucketName, s.snapshotObjectName(databaseID), expiry)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
 }
 
 func (s *SnapshotStorage) NumSnapshots(ctx context.Context) (int, error) {

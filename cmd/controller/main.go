@@ -2,8 +2,9 @@ package main
 
 import (
 	"burstkv/internal/controller"
-	"burstkv/internal/controller/grpc_client_factory"
-	"burstkv/internal/controller/pod_manager"
+	"burstkv/internal/controller/controller_grpc"
+	"burstkv/internal/controller/pod_grpc_client_factory"
+	"burstkv/internal/controller/db_pod_manager"
 	"burstkv/internal/controller/server"
 	"burstkv/internal/core/redis_proxy"
 	"burstkv/internal/core/snapshot_storage"
@@ -28,6 +29,7 @@ func main() {
 	serverPort := flag.Int("server-port", 6378, "Server port")
 	proxyPort := flag.Int("proxy-port", 6379, "Redis Proxy port")
 	grpcPodPort := flag.Int("grpc-port", 6380, "gRPC port for each pod")
+	controllerGRPCPort := flag.Int("controller-grpc-port", 6381, "gRPC port for the controller, used by pods")
 
 	idleLimit := flag.Int("idle-limit", 300, "Idle limit for any given database (seconds)")
 	reaperInterval := flag.Int("reaper-interval", 60, "Interval time between sequential runs of the idle database reaper (seconds)")
@@ -43,12 +45,12 @@ func main() {
 
 	toSecondsDuration := func(t *int) time.Duration { return time.Duration(*t) * time.Second }
 
-	podManager, err := pod_manager.NewPodManager()
+	podManager, err := db_pod_manager.NewPodManager()
 	if err != nil {
 		panic(err)
 	}
 
-	grpcClientFactory := grpc_client_factory.NewGRPCClientFactory(*grpcPodPort)
+	grpcClientFactory := pod_grpc_client_factory.NewPodGRPCClientFactory(*grpcPodPort)
 
 	newController := controller.NewController(toSecondsDuration(idleLimit), toSecondsDuration(reaperInterval), snapshotStorage, *proxyPort, podManager, grpcClientFactory)
 
@@ -71,8 +73,16 @@ func main() {
 		}
 	}()
 
+	go func() {
+		grpcAddr := utils.PortToLocalAddr(*controllerGRPCPort)
+		log.Default().Println("Controller gRPC listening on " + grpcAddr)
+		if err := controller_grpc.NewControllerGRPCServer(newController).ListenAndServe(grpcAddr); err != nil {
+			log.Println(err)
+			stop()
+		}
+	}()
+
 	<-ctx.Done()
 	stop()
 	log.Println("Stopping gracefully...")
-
 }
