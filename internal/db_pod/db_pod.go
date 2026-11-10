@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,10 +21,10 @@ type DBPod struct {
 	databaseID string
 	putURL     string
 	redis      *exec.Cmd
-	redisPort string
+	redisPort int
 }
 
-func NewDBPod(redisPort string) *DBPod {
+func NewDBPod(redisPort int) *DBPod {
 	return &DBPod{
 		redisPort: redisPort,
 	}
@@ -40,7 +41,7 @@ func (d *DBPod) Assign(ctx context.Context, databaseID string, getURL string, pu
 	}
 
 	// Not CommandContext: redis must outlive the request that started it.
-	cmd := exec.Command("redis-server", "--dir", "/data", "--port", d.redisPort, "--requirepass", databaseID)
+	cmd := exec.Command("redis-server", "--dir", "/data", "--port", strconv.Itoa(d.redisPort), "--requirepass", databaseID)
 	if err := cmd.Start(); err != nil {
 		return err
 	}

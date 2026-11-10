@@ -36,7 +36,7 @@ type Controller struct {
 	grpcClientFactory  GRPCClientFactory
 	databases          map[string]*database.Database // databaseID -> Database
 	snapShotstorage    SnapshotStorage
-	proxyPort          string
+	proxyPort          int
 }
 
 // Creates a new DBManager with the given runtime and idle limit
@@ -44,7 +44,7 @@ func NewController(
 	idleLimit time.Duration,
 	reaperInterval time.Duration,
 	snapshotStorage SnapshotStorage,
-	proxyPort string,
+	proxyPort int,
 	podManager PodManager,
 	grpcClientFactory GRPCClientFactory) *Controller {
 	return &Controller{
@@ -223,7 +223,7 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 		}
 	}
 
-	return database.Pod.PodIP + ":" + c.proxyPort, nil
+	return fmt.Sprintf("%s:%d", database.Pod.PodIP, c.proxyPort), nil
 }
 
 func (c *Controller) RecordDatabaseActivity(databaseID string) error {

@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
-	"burstkv/internal/db_pod/grpc"
+	"burstkv/internal/db_pod/db_pod_grpc"
 )
 
 func main() {
@@ -25,12 +26,16 @@ func main() {
 		log.Fatal("REDIS_PORT not set")
 	}
 
-	db := db_pod.NewDBPod(REDIS_PORT)
+	p, err := strconv.Atoi(REDIS_PORT)
+	if err != nil {
+		panic(err)
+	}
+	db := db_pod.NewDBPod(p)
 
 	go func() {
 		grpcAddr := ":" + GRPC_PORT
 		log.Println("pod gRPC listening on " + grpcAddr)
-		if err := grpc.New(db).ListenAndServe(grpcAddr); err != nil {
+		if err := db_pod_grpc.NewPodGRPCServer(db).ListenAndServe(grpcAddr); err != nil {
 			log.Println(err)
 			stop()
 		}

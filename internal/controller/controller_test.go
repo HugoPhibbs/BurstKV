@@ -82,7 +82,7 @@ func newTestController(idleLimit time.Duration, availablePods int) (*Controller,
 		clients:   &fakeClientFactory{clients: map[string]*fakePodClient{}},
 		snapshots: &fakeSnapshotStorage{},
 	}
-	c := NewController(idleLimit, time.Minute, deps.snapshots, "6379", deps.pods, deps.clients)
+	c := NewController(idleLimit, time.Minute, deps.snapshots, 6379, deps.pods, deps.clients)
 	return c, deps
 }
 
