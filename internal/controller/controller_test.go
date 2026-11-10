@@ -19,6 +19,7 @@ import (
 type fakePodManager struct {
 	available int
 	claimed   int
+	deleted   int
 }
 
 func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
@@ -29,7 +30,10 @@ func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 	return &pod.Pod{PodName: fmt.Sprintf("pod-%d", m.claimed), PodIP: fmt.Sprintf("10.0.0.%d", m.claimed)}, nil
 }
 
-func (m *fakePodManager) DeletePod(ctx context.Context) error { return nil }
+func (m *fakePodManager) DeletePod(ctx context.Context, podName string) error {
+	m.deleted++
+	return nil
+}
 
 // Records every RPC sent, keyed by pod IP.
 type fakePodClient struct {
@@ -128,13 +132,16 @@ func TestController_PauseAndResumeDatabase(t *testing.T) {
 	require.NoError(t, err)
 	firstClient := podClientFor(t, c, d, id)
 
+	assert.Equal(t, d.pods.deleted, 0)
 	require.NoError(t, c.PauseDatabase(ctx, id))
 	require.Len(t, firstClient.stops, 1)
 	assert.True(t, firstClient.stops[0].Save, "pause should save a snapshot")
+	assert.Equal(t, d.pods.deleted, 1, "Pausing should increase the number of deleted pods")
 
 	state, _ := c.GetDatabaseState(id)
 	assert.Equal(t, database.Paused, state)
 	assert.ErrorIs(t, c.PauseDatabase(ctx, id), core.ErrDatabaseAlreadyPaused)
+	assert.Equal(t, d.pods.deleted, 1, "Pausing a paused db shouldn't increasing the number of deleted pods")
 
 	require.NoError(t, c.ResumeDatabase(ctx, id))
 	secondClient := podClientFor(t, c, d, id)
@@ -156,11 +163,13 @@ func TestController_DeleteRunningDatabase(t *testing.T) {
 	require.NoError(t, err)
 	client := podClientFor(t, c, d, id)
 
+	assert.Equal(t, d.pods.deleted, 0)
 	require.NoError(t, c.DeleteDatabase(ctx, id))
 
 	require.Len(t, client.stops, 1)
 	assert.False(t, client.stops[0].Save, "delete should not save a snapshot")
 	assert.Equal(t, []string{id}, d.snapshots.deleted)
+	assert.Equal(t, d.pods.deleted, 1)
 
 	state, _ := c.GetDatabaseState(id)
 	assert.Equal(t, database.NotFound, state)

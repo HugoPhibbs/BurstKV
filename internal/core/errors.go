@@ -4,6 +4,8 @@ import (
 	"errors"
 )
 
+var ErrPodNotFound = errors.New("pod not found")
+
 // A database was not found
 var ErrDatabaseNotFound = errors.New("database not found")
 

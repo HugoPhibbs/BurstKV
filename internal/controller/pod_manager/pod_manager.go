@@ -6,20 +6,20 @@ import (
 	"context"
 	"os"
 	"strings"
-	
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
 
 type PodManager struct {
 	k8s          kubernetes.Interface
 	k8sNameSpace string
 }
 
-func NewPodManager() (*PodManager, error){
+func NewPodManager() (*PodManager, error) {
 	k8s, err := newK8sInterface()
 	if err != nil {
 		return nil, err
@@ -64,15 +64,18 @@ func (p *PodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 		// Update sends the pod's resourceVersion, so if two claims race,
 		// one gets a Conflict error and moves on to the next pod.
 		claimed, err := p.k8s.CoreV1().Pods(p.k8sNameSpace).Update(ctx, foundPod, metav1.UpdateOptions{})
-
-		claimedPod := &pod.Pod{PodName: claimed.Name, PodIP: claimed.Status.PodIP}
 		if err == nil {
+			claimedPod := &pod.Pod{PodName: claimed.Name, PodIP: claimed.Status.PodIP}
 			return claimedPod, nil
 		}
 	}
 	return nil, core.ErrNoAvailablePods
 }
 
-func (p *PodManager) DeletePod(ctx context.Context) error {
-	return nil // TODO: Implement me
+func (p *PodManager) DeletePod(ctx context.Context, podName string) error {
+	err := p.k8s.CoreV1().Pods(p.k8sNameSpace).Delete(ctx, podName, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		return core.ErrPodNotFound
+	}
+	return err
 }
