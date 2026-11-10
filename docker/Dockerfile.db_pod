@@ -12,6 +12,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /db_pod ./cmd/db_pod
 
 FROM alpine:3.22
-RUN apk add --no-cache docker-cli
+RUN apk add --no-cache redis
 COPY --from=build /db_pod /usr/local/bin/db_pod
 ENTRYPOINT ["db_pod"]
