@@ -18,7 +18,7 @@ const DB_ID_LENGTH = 8
 
 type PodManager interface {
 	ClaimWarmPod(ctx context.Context) (*pod.Pod, error)
-	DeletePod(ctx context.Context) error
+	DeletePod(ctx context.Context, podName string) error
 }
 
 type GRPCClientFactory interface {
@@ -136,6 +136,10 @@ func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Databas
 		return err
 	}
 
+	if err := c.podManager.DeletePod(ctx, foundDB.Pod.PodName); err != nil {
+		return err
+		
+	}
 	foundDB.Pod = nil
 	return nil
 }
