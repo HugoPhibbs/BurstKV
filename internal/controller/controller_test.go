@@ -1,192 +1,254 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/controller/domain/database"
-	"burstkv/internal/utils"
-	"burstkv/internal/worker"
-	workergrpc "burstkv/internal/worker/grpc"
-	"burstkv/internal/worker/worker_test"
+	"burstkv/internal/controller/pod"
+	"burstkv/internal/core"
+	"burstkv/internal/db_pod/db_pod_pb"
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-	"github.com/redis/go-redis/v9/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-func TestMain(m *testing.M) {
-	logging.Disable()
-	if err := os.MkdirAll("snapshots", 0o755); err != nil {
-		panic(err)
+// Hands out pods with unique IPs until `available` runs out.
+type fakePodManager struct {
+	available int
+	claimed   int
+}
+
+func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
+	if m.claimed >= m.available {
+		return nil, core.ErrNoAvailablePods
 	}
-	code := m.Run()
-	os.RemoveAll("snapshots")
-	os.Exit(code)
+	m.claimed++
+	return &pod.Pod{PodName: fmt.Sprintf("pod-%d", m.claimed), PodIP: fmt.Sprintf("10.0.0.%d", m.claimed)}, nil
 }
 
-// Starts a worker with a gRPC server on grpcPort and returns a controller connected to it,
-// along with the worker itself so tests can look up database addresses.
-func newTestController(t *testing.T, idleLimit time.Duration, grpcPort, minPort, poolSize int) (*Controller, *worker.Worker) {
-	ctx := t.Context()
+func (m *fakePodManager) DeletePod(ctx context.Context) error { return nil }
+
+// Records every RPC sent, keyed by pod IP.
+type fakePodClient struct {
+	assigns []*db_pod_pb.AssignDatabaseRequest
+	stops   []*db_pod_pb.StopRequest
+}
+
+func (c *fakePodClient) Assign(ctx context.Context, in *db_pod_pb.AssignDatabaseRequest, opts ...grpc.CallOption) (*db_pod_pb.Empty, error) {
+	c.assigns = append(c.assigns, in)
+	return &db_pod_pb.Empty{}, nil
+}
+
+func (c *fakePodClient) Stop(ctx context.Context, in *db_pod_pb.StopRequest, opts ...grpc.CallOption) (*db_pod_pb.Empty, error) {
+	c.stops = append(c.stops, in)
+	return &db_pod_pb.Empty{}, nil
+}
+
+type fakeClientFactory struct {
+	clients map[string]*fakePodClient // podIP -> client
+	opened  int
+	closed  int
+}
+
+func (f *fakeClientFactory) NewConnectedClient(podIP string) (db_pod_pb.DBPodClient, func() error, error) {
+	if f.clients[podIP] == nil {
+		f.clients[podIP] = &fakePodClient{}
+	}
+	f.opened++
+	return f.clients[podIP], func() error { f.closed++; return nil }, nil
+}
+
+type fakeSnapshotStorage struct {
+	deleted []string
+}
+
+func (s *fakeSnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string) error {
+	s.deleted = append(s.deleted, databaseID)
+	return nil
+}
+
+type testDeps struct {
+	pods      *fakePodManager
+	clients   *fakeClientFactory
+	snapshots *fakeSnapshotStorage
+}
+
+func newTestController(idleLimit time.Duration, availablePods int) (*Controller, *testDeps) {
+	deps := &testDeps{
+		pods:      &fakePodManager{available: availablePods},
+		clients:   &fakeClientFactory{clients: map[string]*fakePodClient{}},
+		snapshots: &fakeSnapshotStorage{},
+	}
+	c := NewController(idleLimit, time.Minute, deps.snapshots, 6379, deps.pods, deps.clients)
+	return c, deps
+}
+
+// Returns the fake client for the pod the database is (or was last) running on.
+func podClientFor(t *testing.T, c *Controller, d *testDeps, id string) *fakePodClient {
 	t.Helper()
-	grpcAddr := fmt.Sprintf("127.0.0.1:%d", grpcPort)
-
-	controlledWorker, err := controlled_worker.NewControlledWorker("test", grpcAddr, "none")
-	require.NoError(t, err)
-
-	remoteWorker, snapshotStorage := worker_test.NewMockWorker(t, minPort, poolSize)
-	t.Cleanup(func() {
-		if remoteWorker.StopAllContainers(ctx) != nil {
-			t.Errorf("stopping containers: %v", err)
-		}
-	})
-
-	go workergrpc.New(remoteWorker).ListenAndServe(grpcAddr)
-	waitCtx, cancel := context.WithTimeout(ctx, 10 * time.Second)
-	defer cancel()
-	require.NoError(t, controlledWorker.WaitUntilRPCIsReady(waitCtx))
-
-	require.NoError(t, err)
-	t.Cleanup(func() { controlledWorker.RPCConnection.Close() })
-
-	c := NewController(idleLimit, snapshotStorage)
-	c.AddWorker(ctx, controlledWorker)
-	return c, remoteWorker
+	db := c.databases[id]
+	require.NotNil(t, db.Pod, "database %s has no pod", id)
+	return d.clients.clients[db.Pod.PodIP]
 }
 
-// Connects to a running database, waiting for Redis to start.
-func redisConnect(t *testing.T, w *worker.Worker, databaseID string) *redis.Client {
-	t.Helper()
-	addr, err := w.DatabaseAddress(databaseID)
-	require.NoError(t, err)
-	rdb := redis.NewClient(&redis.Options{Addr: addr, Password: databaseID})
-	t.Cleanup(func() { rdb.Close() })
-	require.NoError(t, utils.WaitForRedis(t.Context(), rdb, 5))
-	return rdb
-}
-
-func TestController_TestPauseAndResumeDatabase(t *testing.T) {
+func TestController_CreateDatabase(t *testing.T) {
 	ctx := t.Context()
-	c, w := newTestController(t, 300*time.Second, 33000, 32000, 1)
-	defer c.DeleteAllDatabases(ctx)
+	c, d := newTestController(time.Minute, 1)
 
 	id, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database")
+	require.NoError(t, err)
 
-	rdb := redisConnect(t, w, id)
-	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
+	state, err := c.GetDatabaseState(id)
+	require.NoError(t, err)
+	assert.Equal(t, database.Running, state)
 
-	require.NoError(t, c.PauseDatabase(ctx, id), "failed to pause database")
-	assert.Error(t, rdb.Ping(ctx).Err(), "expected error when pinging paused database")
-
-	require.NoError(t, c.ResumeDatabase(ctx, id), "failed to resume database")
-
-	rdb = redisConnect(t, w, id)
-	val, err := rdb.Get(ctx, "test_key").Result()
-	require.NoError(t, err, "failed to get key from resumed database")
-	assert.Equal(t, "test_value", val)
+	client := podClientFor(t, c, d, id)
+	require.Len(t, client.assigns, 1)
+	assert.Equal(t, id, client.assigns[0].DatabaseId)
+	assert.True(t, client.assigns[0].Create)
+	assert.Equal(t, d.clients.opened, d.clients.closed, "every connection should be closed")
 }
 
-func TestController_TestDeleteDatabase(t *testing.T) {
+func TestController_CreateDatabase_NoPods(t *testing.T) {
+	c, _ := newTestController(time.Minute, 0)
+
+	_, err := c.CreateDatabase(t.Context())
+	assert.ErrorIs(t, err, core.ErrNoAvailablePods)
+	assert.Empty(t, c.GetAllDatabaseIDs())
+}
+
+func TestController_PauseAndResumeDatabase(t *testing.T) {
 	ctx := t.Context()
-	c, w := newTestController(t, 300*time.Second, 33001, 32010, 1)
-	defer c.DeleteAllDatabases(ctx)
+	c, d := newTestController(time.Minute, 2)
 
 	id, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database")
+	require.NoError(t, err)
+	firstClient := podClientFor(t, c, d, id)
 
-	rdb := redisConnect(t, w, id)
-	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
+	require.NoError(t, c.PauseDatabase(ctx, id))
+	require.Len(t, firstClient.stops, 1)
+	assert.True(t, firstClient.stops[0].Save, "pause should save a snapshot")
 
-	require.NoError(t, c.DeleteDatabase(ctx, id), "failed to delete database")
-	assert.Error(t, rdb.Ping(ctx).Err(), "expected error when pinging deleted database")
+	state, _ := c.GetDatabaseState(id)
+	assert.Equal(t, database.Paused, state)
+	assert.ErrorIs(t, c.PauseDatabase(ctx, id), core.ErrDatabaseAlreadyPaused)
+
+	require.NoError(t, c.ResumeDatabase(ctx, id))
+	secondClient := podClientFor(t, c, d, id)
+	require.Len(t, secondClient.assigns, 1)
+	assert.Equal(t, id, secondClient.assigns[0].DatabaseId)
+	assert.False(t, secondClient.assigns[0].Create, "resume should not create a new database")
+
+	state, _ = c.GetDatabaseState(id)
+	assert.Equal(t, database.Running, state)
+	assert.ErrorIs(t, c.ResumeDatabase(ctx, id), core.ErrDatabaseAlreadyActive)
+	assert.Equal(t, d.clients.opened, d.clients.closed, "every connection should be closed")
 }
 
-func TestController_TestCreateDatabase(t *testing.T) {
+func TestController_DeleteRunningDatabase(t *testing.T) {
 	ctx := t.Context()
-	c, w := newTestController(t, 300*time.Second, 33002, 32020, 1)
-	defer c.DeleteAllDatabases(ctx)
+	c, d := newTestController(time.Minute, 1)
 
 	id, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database")
+	require.NoError(t, err)
+	client := podClientFor(t, c, d, id)
 
-	rdb := redisConnect(t, w, id)
-	require.NoError(t, rdb.Set(ctx, "test_key", "test_value", 0).Err())
+	require.NoError(t, c.DeleteDatabase(ctx, id))
 
-	val, err := rdb.Get(ctx, "test_key").Result()
-	require.NoError(t, err, "failed to get key from new database")
-	assert.Equal(t, "test_value", val)
+	require.Len(t, client.stops, 1)
+	assert.False(t, client.stops[0].Save, "delete should not save a snapshot")
+	assert.Equal(t, []string{id}, d.snapshots.deleted)
+
+	state, _ := c.GetDatabaseState(id)
+	assert.Equal(t, database.NotFound, state)
 }
 
-func TestController_TestGetAllDatabaseIDs(t *testing.T) {
+func TestController_DeletePausedDatabase(t *testing.T) {
 	ctx := t.Context()
-	c, _ := newTestController(t, 300*time.Second, 33003, 32030, 2)
-	defer c.DeleteAllDatabases(ctx)
+	c, d := newTestController(time.Minute, 1)
+
+	id, err := c.CreateDatabase(ctx)
+	require.NoError(t, err)
+	client := podClientFor(t, c, d, id)
+	require.NoError(t, c.PauseDatabase(ctx, id))
+
+	require.NoError(t, c.DeleteDatabase(ctx, id))
+
+	assert.Len(t, client.stops, 1, "a paused database should not be stopped again")
+	assert.Equal(t, []string{id}, d.snapshots.deleted)
+}
+
+func TestController_UnknownDatabase(t *testing.T) {
+	ctx := t.Context()
+	c, _ := newTestController(time.Minute, 1)
+
+	state, err := c.GetDatabaseState("missing")
+	require.NoError(t, err)
+	assert.Equal(t, database.NotFound, state)
+
+	assert.ErrorIs(t, c.PauseDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
+	assert.ErrorIs(t, c.ResumeDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
+	assert.ErrorIs(t, c.DeleteDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
+	assert.ErrorIs(t, c.RecordDatabaseActivity("missing"), core.ErrDatabaseNotFound)
+	_, err = c.RouteDatabase(ctx, "missing")
+	assert.ErrorIs(t, err, core.ErrDatabaseNotFound)
+}
+
+func TestController_GetAllDatabaseIDs(t *testing.T) {
+	ctx := t.Context()
+	c, _ := newTestController(time.Minute, 2)
 
 	id1, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database 1")
-
+	require.NoError(t, err)
 	id2, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database 2")
+	require.NoError(t, err)
 
-	all_ids := c.GetAllDatabaseIDs()
-	assert.True(t, len(all_ids) == 2, "expected just 2 database IDs, got %d", len(all_ids))
-	assert.Contains(t, all_ids, id1, "database 1 ID not found in all IDs")
-	assert.Contains(t, all_ids, id2, "database 2 ID not found in all IDs")
+	assert.ElementsMatch(t, []string{id1, id2}, c.GetAllDatabaseIDs())
 }
 
-func TestController_TestGetDatabaseState(t *testing.T) {
+func TestController_RouteDatabase(t *testing.T) {
 	ctx := t.Context()
-	c, _ := newTestController(t, 300*time.Second, 33004, 32040, 1)
-	defer c.DeleteAllDatabases(ctx)
+	c, _ := newTestController(time.Minute, 2)
 
 	id, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database")
-
-	state, err := c.GetDatabaseState(id)
 	require.NoError(t, err)
-	assert.Equal(t, database.Running, state, "expected database state to be Active")
 
-	require.NoError(t, c.PauseDatabase(ctx, id), "failed to pause database")
-	state, err = c.GetDatabaseState(id)
+	addr, err := c.RouteDatabase(ctx, id)
 	require.NoError(t, err)
-	assert.Equal(t, database.Paused, state, "expected database state to be Paused")
+	assert.Equal(t, "10.0.0.1:6379", addr)
 
-	require.NoError(t, c.ResumeDatabase(ctx, id), "failed to resume database")
-	state, err = c.GetDatabaseState(id)
+	// Routing to a paused database resumes it on a new pod.
+	require.NoError(t, c.PauseDatabase(ctx, id))
+	addr, err = c.RouteDatabase(ctx, id)
 	require.NoError(t, err)
-	assert.Equal(t, database.Running, state, "expected database state to be Active after resuming")
+	assert.Equal(t, "10.0.0.2:6379", addr)
 
-	require.NoError(t, c.DeleteDatabase(ctx, id), "failed to delete database")
-	state, err = c.GetDatabaseState(id)
-	require.NoError(t, err)
-	assert.Equal(t, database.NotFound, state, "expected database state to be NotFound after deletion")
+	state, _ := c.GetDatabaseState(id)
+	assert.Equal(t, database.Running, state)
 }
 
-func TestController_TestIdleDatabaseReaping(t *testing.T) {
+func TestController_ReapIdleDatabases(t *testing.T) {
 	ctx := t.Context()
-	timeout := 1 * time.Second
-	c, _ := newTestController(t, timeout, 33005, 32050, 1) // Set idle timeout to 1 second for testing
-	c.ReaperTimeInterval = 500 * time.Millisecond
-	c.StartIdleDatabaseReaper(ctx)
-	defer c.DeleteAllDatabases(ctx)
+	c, d := newTestController(-time.Second, 2) // any recorded activity counts as idle
 
-	id, err := c.CreateDatabase(ctx)
-	require.NoError(t, err, "failed to create database")
-	require.NoError(t, c.RecordDatabaseActivity(id))
-
-	// Check if the database has been reaped
-	require.Eventually(t, func() bool {
-		s, _ := c.GetDatabaseState(id)
-		return s == database.Paused
-	}, 10 * time.Second, 100 * time.Millisecond)
-	
-	state, err := c.GetDatabaseState(id)
+	idle, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, database.Paused, state, "expected database state to be Paused after idle timeout")
+	require.NoError(t, c.RecordDatabaseActivity(idle))
+	idleClient := podClientFor(t, c, d, idle)
+
+	neverUsed, err := c.CreateDatabase(ctx) // no recorded activity, so never reaped
+	require.NoError(t, err)
+
+	c.reapIdleDatabases(ctx)
+
+	state, _ := c.GetDatabaseState(idle)
+	assert.Equal(t, database.Paused, state)
+	require.Len(t, idleClient.stops, 1)
+	assert.True(t, idleClient.stops[0].Save)
+
+	state, _ = c.GetDatabaseState(neverUsed)
+	assert.Equal(t, database.Running, state)
 }

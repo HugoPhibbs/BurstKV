@@ -1,58 +1,66 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/controller/domain/database"
-	"burstkv/internal/core/snapshot_storage"
+	"burstkv/internal/controller/pod"
+	"burstkv/internal/core"
+	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
 	"context"
 	"fmt"
+	"log"
 	"maps"
 	"slices"
 	"time"
 )
 
 const DB_ID_LENGTH = 8
-const DEFAULT_REAPER_TIME_INTERVAL = 1 * time.Minute
+
+type PodManager interface {
+	ClaimWarmPod(ctx context.Context) (*pod.Pod, error)
+	DeletePod(ctx context.Context) error
+}
+
+type GRPCClientFactory interface {
+	NewConnectedClient(databasePodIP string) (db_pod_pb.DBPodClient, func() error, error)
+}
+
+type SnapshotStorage interface {
+	DeleteSnapshot(ctx context.Context, databaseID string) error
+}
 
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
-	workers            map[string]*controlled_worker.ControlledWorker // workerID -> Worker
-	databases          map[string]*database.Database                  // databaseID -> Database
-	snapShotstorage    *snapshot_storage.SnapshotStorage
+	podManager         PodManager
+	grpcClientFactory  GRPCClientFactory
+	databases          map[string]*database.Database // databaseID -> Database
+	snapShotstorage    SnapshotStorage
+	proxyPort          int
 }
 
 // Creates a new DBManager with the given runtime and idle limit
-func NewController(idleLimit time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage) *Controller {
+func NewController(
+	idleLimit time.Duration,
+	reaperInterval time.Duration,
+	snapshotStorage SnapshotStorage,
+	proxyPort int,
+	podManager PodManager,
+	grpcClientFactory GRPCClientFactory) *Controller {
 	return &Controller{
 		idleLimit:          idleLimit,
-		ReaperTimeInterval: DEFAULT_REAPER_TIME_INTERVAL,
-		workers:            make(map[string]*controlled_worker.ControlledWorker),
+		ReaperTimeInterval: reaperInterval,
+		podManager:         podManager,
+		grpcClientFactory:  grpcClientFactory,
 		databases:          make(map[string]*database.Database),
-		snapShotstorage: snapshotStorage,
-	}
-}
-
-func (c *Controller) AddWorker(ctx context.Context, worker *controlled_worker.ControlledWorker) {
-	c.workers[worker.WorkerID] = worker
-
-	databaseIDs, err := worker.AssignedDatabases(ctx)
-	if err != nil {
-		fmt.Printf("Error getting assigned databases from worker %s: %v\n", worker.WorkerID, err)
-		return
-	}
-
-	for _, id := range databaseIDs {
-		database := database.NewDatabase(id, worker.WorkerID)
-		c.databases[id] = database
-		database.RecordActivity() // TODO update this from the worker
+		snapShotstorage:    snapshotStorage,
+		proxyPort:          proxyPort,
 	}
 }
 
 // Returns the state of the database with the given ID.
-func (c *Controller) GetDatabaseState(databaseId string) (database.DatabaseStatus, error) {
-	foundDatabase, exists := c.databases[databaseId]
+func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatus, error) {
+	foundDatabase, exists := c.databases[databaseID]
 	if !exists {
 		return database.NotFound, nil
 	}
@@ -67,45 +75,28 @@ func (c *Controller) GetAllDatabaseIDs() []string {
 	return slices.Collect(maps.Keys(c.databases))
 }
 
-// Creates a new database and returns the new database ID
-func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
-	for workerID, worker := range c.workers {
-		if worker.CanAssignDatabase(ctx) {
-			new_database_id := utils.RandomString(DB_ID_LENGTH)
-			err := worker.CreateDatabase(ctx, new_database_id)
-			if err != nil {
-				return "", err
-			}
-			new_database := database.NewDatabase(new_database_id, workerID)
-			c.databases[new_database_id] = new_database
-			return new_database_id, nil
-		}
-	}
-	return "", ErrNoAvailableWorkers
-}
-
 // Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
-func (c *Controller) DeleteDatabase(ctx context.Context, databaseId string) error {
-	if database, exists := c.databases[databaseId]; exists {
-		isRunning := database.IsRunning()
-		if isRunning {
-			worker, ok := c.workers[database.WorkerID()]
-			if !ok {
-				panic("Invalid state: Database is assigned to a worker, yet the worker doesn't contain the database")
-			}
-			err := worker.DeleteDatabase(ctx, databaseId)
-			if err != nil {
-				return err
-			}
-		} else {
-			c.snapShotstorage.DeleteSnapshot(ctx, databaseId)
-		}
+func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) error {
+	foundDB, exists := c.databases[databaseID]
 
-		delete(c.databases, databaseId)
-		return nil
+	if !exists {
+		return core.ErrDatabaseNotFound
 	}
-	return ErrDatabaseNotFound
+
+	if foundDB.IsRunning() {
+		if err := c.stopDatabase(ctx, foundDB, false); err != nil {
+			return err
+		}
+	}
+
+	if err := c.snapShotstorage.DeleteSnapshot(ctx, databaseID); err != nil {
+		log.Printf("Error occured when deleting a snapshot %v", err)
+	}
+
+	delete(c.databases, databaseID)
+
+	return nil
 }
 
 // Deletes all databases managed by this DBManager.
@@ -119,79 +110,91 @@ func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 	return nil
 }
 
-func (c *Controller) RecordDatabaseActivity(databaseId string) error {
-	database, exists := c.databases[databaseId]
-	if !exists {
-		return ErrDatabaseNotFound
-	}
-	database.RecordActivity()
-	return nil
-}
-
-func (c *Controller) workerForDatabase(databaseId string) *controlled_worker.ControlledWorker {
-	database, exists := c.databases[databaseId]
-	if !exists {
-		return nil
-	}
-	return c.workers[database.WorkerID()]
-}
-
 // Pauses the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyPaused if the database is already paused.
-func (c *Controller) PauseDatabase(ctx context.Context, databaseId string) error {
-	database, exists := c.databases[databaseId]
+func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error {
+	foundDB, exists := c.databases[databaseID]
 	if !exists {
-		return ErrDatabaseNotFound
+		return core.ErrDatabaseNotFound
 	}
-	if !database.IsRunning() {
-		return ErrDatabaseAlreadyPaused
+	if !foundDB.IsRunning() {
+		return core.ErrDatabaseAlreadyPaused
 	}
-	if err := c.workers[database.WorkerID()].PauseDatabase(ctx, databaseId); err != nil {
+	return c.stopDatabase(ctx, foundDB, true)
+}
+
+func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
+	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod.PodIP)
+	if err != nil {
 		return err
 	}
-	database.RemoveWorker()
+	defer close()
+
+	_, err = client.Stop(ctx, &db_pod_pb.StopRequest{Save: save})
+
+	if err != nil {
+		return err
+	}
+
+	foundDB.Pod = nil
 	return nil
 }
 
 // Resumes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyActive if the database is already active.
-func (c *Controller) ResumeDatabase(ctx context.Context, databaseId string) error {
-	database, exists := c.databases[databaseId]
+func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) error {
+	foundDB, exists := c.databases[databaseID]
+
 	if !exists {
-		return ErrDatabaseNotFound
+		return core.ErrDatabaseNotFound
 	}
 
-	if database.IsRunning() {
-		return ErrDatabaseAlreadyActive
+	return c.assignDatabase(ctx, foundDB, false)
+}
+
+// Creates a new database and returns the new database ID
+func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
+	newDatabaseID := utils.RandomString(DB_ID_LENGTH)
+	newDB := database.NewDatabase(newDatabaseID)
+
+	if err := c.assignDatabase(ctx, newDB, true); err != nil {
+		return "", err
 	}
 
-	worker := c.findAvailableWorker(ctx)
-	if worker == nil {
-		return ErrNoAvailableWorkers
+	c.databases[newDatabaseID] = newDB
+	return newDatabaseID, nil
+}
+
+func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, create bool) error {
+	if DB.IsRunning() {
+		return core.ErrDatabaseAlreadyActive
 	}
-	err := worker.ResumeDatabase(ctx, databaseId)
+
+	claimedPod, err := c.podManager.ClaimWarmPod(ctx)
 	if err != nil {
 		return err
 	}
-	database.AddWorker(worker.WorkerID)
-	return nil
-}
 
-func (c *Controller) findAvailableWorker(ctx context.Context) *controlled_worker.ControlledWorker {
-	for _, worker := range c.workers {
-		if worker.CanAssignDatabase(ctx) {
-			return worker
-		}
+	client, close, err := c.grpcClientFactory.NewConnectedClient(claimedPod.PodIP)
+	if err != nil {
+		return err
 	}
+	defer close()
+
+	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
+	if err != nil {
+		return err
+	}
+	DB.Pod = claimedPod
 	return nil
 }
 
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
 	for _, db := range c.databases {
 		if db.IsActiveAndIdle(c.idleLimit) {
-			err := c.PauseDatabase(ctx, db.Id())
+			err := c.PauseDatabase(ctx, db.ID())
 			if err != nil {
-				fmt.Printf("Error pausing idle database %s: %v\n", db.Id(), err)
+				fmt.Printf("Error pausing idle database %s: %v\n", db.ID(), err)
 			}
 		}
 	}
@@ -206,4 +209,32 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 			c.reapIdleDatabases(ctx)
 		}
 	}()
+}
+
+func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
+	database, exists := c.databases[databaseID]
+	if !exists {
+		return "", core.ErrDatabaseNotFound
+	}
+
+	if !database.IsRunning() {
+		if err := c.ResumeDatabase(ctx, databaseID); err != nil {
+			return "", err
+		}
+	}
+
+	return fmt.Sprintf("%s:%d", database.Pod.PodIP, c.proxyPort), nil
+}
+
+func (c *Controller) RecordDatabaseActivity(databaseID string) error {
+	database, exists := c.databases[databaseID]
+	if !exists {
+		return core.ErrDatabaseNotFound
+	}
+	database.RecordActivity()
+	return nil
+}
+
+func (c *Controller) StopAllWorkers() error {
+	return nil // Implement me
 }

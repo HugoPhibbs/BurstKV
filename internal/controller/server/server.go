@@ -3,6 +3,7 @@ package server
 import (
 	"burstkv/internal/controller"
 	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/core"
 	"errors"
 	"net/http"
 
@@ -20,38 +21,38 @@ func New(ctrl *controller.Controller) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"databases": databases})
 	})
 
-	router.GET("/database/:databaseId", func(c *gin.Context) {
-		state, err := ctrl.GetDatabaseState(c.Param("databaseId"))
+	router.GET("/database/:databaseID", func(c *gin.Context) {
+		state, err := ctrl.GetDatabaseState(c.Param("databaseID"))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
 		if state == database.NotFound {
-			writeError(c, controller.ErrDatabaseNotFound)
+			writeError(c, core.ErrDatabaseNotFound)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": state.String()})
 	})
 
 	router.POST("/database", func(c *gin.Context) {
-		databaseId, err := ctrl.CreateDatabase(c.Request.Context())
+		databaseID, err := ctrl.CreateDatabase(c.Request.Context())
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"databaseId": databaseId})
+		c.JSON(http.StatusOK, gin.H{"databaseID": databaseID})
 	})
 
-	router.DELETE("/database/delete/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.DeleteDatabase(c.Request.Context(), c.Param("databaseId")))
+	router.DELETE("/database/delete/:databaseID", func(c *gin.Context) {
+		writeResult(c, ctrl.DeleteDatabase(c.Request.Context(), c.Param("databaseID")))
 	})
 
-	router.POST("/database/pause/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.PauseDatabase(c.Request.Context(), c.Param("databaseId")))
+	router.POST("/database/pause/:databaseID", func(c *gin.Context) {
+		writeResult(c, ctrl.PauseDatabase(c.Request.Context(), c.Param("databaseID")))
 	})
 
-	router.POST("/database/resume/:databaseId", func(c *gin.Context) {
-		writeResult(c, ctrl.ResumeDatabase(c.Request.Context(), c.Param("databaseId")))
+	router.POST("/database/resume/:databaseID", func(c *gin.Context) {
+		writeResult(c, ctrl.ResumeDatabase(c.Request.Context(), c.Param("databaseID")))
 	})
 
 	return router
@@ -70,9 +71,9 @@ func writeResult(c *gin.Context, err error) {
 func writeError(c *gin.Context, err error) {
 	code := http.StatusInternalServerError
 	switch {
-	case errors.Is(err, controller.ErrDatabaseNotFound):
+	case errors.Is(err, core.ErrDatabaseNotFound):
 		code = http.StatusNotFound
-	case errors.Is(err, controller.ErrNoAvailableWorkers):
+	case errors.Is(err, core.ErrNoAvailablePods):
 		code = http.StatusServiceUnavailable
 	}
 	c.JSON(code, gin.H{"error": err.Error()})

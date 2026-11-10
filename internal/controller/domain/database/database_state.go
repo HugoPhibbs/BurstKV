@@ -19,6 +19,8 @@ func (s DatabaseStatus) String() string {
 		return "non-found"
 	case Unknown:
 		return "unknown"
+	case Paused:
+		return "paused"
 	default:
 		panic(fmt.Sprintf("invalid DatabaseStatus: %d", s))
 	}

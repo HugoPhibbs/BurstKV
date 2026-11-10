@@ -36,7 +36,7 @@ GET /database/{databaseID}
 * ActiveDBs: Map[databaseID: RedisDB]. Active DBs
 * InActiveDBs: Map[databaseID: RedisDB]. Inactive DBs (but not deleted). Since the numebr of inactive DBs is likely to be far larger than the number of activeDBs, storing these explicitly (instead of in one list), allows you to iterate only over the active ones easily
 * active: bool. Whether the manager is currently active
-* databaseIdleLimit: int. How long, in seconds, databases last before being paused without any requests
+* databaseIDleLimit: int. How long, in seconds, databases last before being paused without any requests
 * dbRuntime: DBRuntime: runtime currently being used for DBs
 
 #### Methods:
@@ -52,7 +52,7 @@ stop()
 * Stops the ongoing DB reaper process.
 * Deletes all active DBs
 
-ensureActive(databaseId: str): str
+ensureActive(databaseID: str): str
 * Uses the runtime to ensure that the DB is active
 * Then returns the allocated URL from the runtime
 
@@ -61,19 +61,19 @@ createDB(): ID
 * Uses the runtime to create a DB, returns the created ID (this is used for the proxy)
 * Adds this DB to the active list
 
-pauseDB(databaseId: str): bool
+pauseDB(databaseID: str): bool
 * Uses the runtime to pause a DB
 * Sets the url to be None
 * Then moves the DB to the inactive list
 
-deleteDB(databaseId: str): bool
+deleteDB(databaseID: str): bool
 * Uses the runtime to delete the DB
 * Removes the DB from both the active and inactive lists
 
 runDatabaseReaper(): None
 * Every 10 seconds, iterates through databases, and pauses any that haven't had any requests beyond the timeout limit
 
-recordActivity(databaseId: str): bool
+recordActivity(databaseID: str): bool
 * Updates the latest request time for a DB, used by the proxy
 
 ### DBRuntime

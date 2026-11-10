@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package db_pod;
+
+option go_package = "burstkv/internal/db_pod/db_pod_pb";
+
+service DBPod {
+  rpc Assign(AssignDatabaseRequest) returns (Empty);
+  rpc Stop(StopRequest) returns (Empty);
+}
+
+message Empty {}
+
+message StopRequest {
+  bool save = 1;
+}
+
+message AssignDatabaseRequest {
+  string database_id = 1;
+  string get_url = 2;
+  string put_url = 3;
+  bool create = 4;
+}
