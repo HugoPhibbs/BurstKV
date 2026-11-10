@@ -102,13 +102,13 @@ func (x *StopRequest) GetSave() bool {
 }
 
 type AssignDatabaseRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
-	GetUrl        string                 `protobuf:"bytes,2,opt,name=get_url,json=getUrl,proto3" json:"get_url,omitempty"`
-	PutUrl        string                 `protobuf:"bytes,3,opt,name=put_url,json=putUrl,proto3" json:"put_url,omitempty"`
-	Create        bool                   `protobuf:"varint,4,opt,name=create,proto3" json:"create,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId            string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	GetUrl                string                 `protobuf:"bytes,2,opt,name=get_url,json=getUrl,proto3" json:"get_url,omitempty"`
+	Create                bool                   `protobuf:"varint,4,opt,name=create,proto3" json:"create,omitempty"`
+	ControllerGrpcAddress string                 `protobuf:"bytes,5,opt,name=controller_grpc_address,json=controllerGrpcAddress,proto3" json:"controller_grpc_address,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *AssignDatabaseRequest) Reset() {
@@ -155,18 +155,18 @@ func (x *AssignDatabaseRequest) GetGetUrl() string {
 	return ""
 }
 
-func (x *AssignDatabaseRequest) GetPutUrl() string {
-	if x != nil {
-		return x.PutUrl
-	}
-	return ""
-}
-
 func (x *AssignDatabaseRequest) GetCreate() bool {
 	if x != nil {
 		return x.Create
 	}
 	return false
+}
+
+func (x *AssignDatabaseRequest) GetControllerGrpcAddress() string {
+	if x != nil {
+		return x.ControllerGrpcAddress
+	}
+	return ""
 }
 
 var File_proto_db_pod_proto protoreflect.FileDescriptor
@@ -176,13 +176,13 @@ const file_proto_db_pod_proto_rawDesc = "" +
 	"\x12proto/db_pod.proto\x12\x06db_pod\"\a\n" +
 	"\x05Empty\"!\n" +
 	"\vStopRequest\x12\x12\n" +
-	"\x04save\x18\x01 \x01(\bR\x04save\"\x82\x01\n" +
+	"\x04save\x18\x01 \x01(\bR\x04save\"\xa1\x01\n" +
 	"\x15AssignDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
 	"databaseId\x12\x17\n" +
-	"\aget_url\x18\x02 \x01(\tR\x06getUrl\x12\x17\n" +
-	"\aput_url\x18\x03 \x01(\tR\x06putUrl\x12\x16\n" +
-	"\x06create\x18\x04 \x01(\bR\x06create2k\n" +
+	"\aget_url\x18\x02 \x01(\tR\x06getUrl\x12\x16\n" +
+	"\x06create\x18\x04 \x01(\bR\x06create\x126\n" +
+	"\x17controller_grpc_address\x18\x05 \x01(\tR\x15controllerGrpcAddress2k\n" +
 	"\x05DBPod\x126\n" +
 	"\x06Assign\x12\x1d.db_pod.AssignDatabaseRequest\x1a\r.db_pod.Empty\x12*\n" +
 	"\x04Stop\x12\x13.db_pod.StopRequest\x1a\r.db_pod.EmptyB#Z!burstkv/internal/db_pod/db_pod_pbb\x06proto3"

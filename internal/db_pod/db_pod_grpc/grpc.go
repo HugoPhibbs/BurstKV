@@ -10,11 +10,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-type GRPCClientFactory struct {
-	port string
-}
-
-
 type PodGRPCServer struct {
 	pb.UnimplementedDBPodServer
 	dbPod *db_pod.DBPod
@@ -34,16 +29,8 @@ func (s *PodGRPCServer) ListenAndServe(addr string) error {
 	return grpcServer.Serve(lis)
 }
 
-func (s *PodGRPCServer) CreateDatabase(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
-	err := s.dbPod.Assign(ctx, req.GetDatabaseId(), req.GetGetUrl(), req.GetPutUrl(), true)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.Empty{}, nil
-}
-
-func (s *PodGRPCServer) ResumeDatabase(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
-	err := s.dbPod.Assign(ctx, req.GetDatabaseId(), req.GetGetUrl(), req.GetPutUrl(), false)
+func (s *PodGRPCServer) Assign(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
+	err := s.dbPod.Assign(ctx, req.GetDatabaseId(), req.GetGetUrl(), req.GetCreate())
 	if err != nil {
 		return nil, err
 	}
