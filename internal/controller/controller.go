@@ -46,7 +46,7 @@ func NewController(
 	snapshotStorage SnapshotStorage,
 	proxyPort string,
 	podManager PodManager,
-	grpcClientFactory GRPCClientFactory) (*Controller, error) {
+	grpcClientFactory GRPCClientFactory) *Controller {
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: reaperInterval,
@@ -55,7 +55,7 @@ func NewController(
 		databases:          make(map[string]*database.Database),
 		snapShotstorage:    snapshotStorage,
 		proxyPort:          proxyPort,
-	}, nil
+	}
 }
 
 // Returns the state of the database with the given ID.
@@ -91,7 +91,7 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 	}
 
 	if err := c.snapShotstorage.DeleteSnapshot(ctx, databaseID); err != nil {
-		log.Println(fmt.Sprintf("Error occured when deleting a snapshot %v", err))
+		log.Printf("Error occured when deleting a snapshot %v", err)
 	}
 
 	delete(c.databases, databaseID)
@@ -125,10 +125,10 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error
 
 func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
 	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod.PodIP)
-	defer close()
 	if err != nil {
 		return err
 	}
+	defer close()
 
 	_, err = client.Stop(ctx, &db_pod_pb.StopRequest{Save: save})
 
@@ -175,14 +175,17 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 		return err
 	}
 
-	DB.Pod = claimedPod
 	client, close, err := c.grpcClientFactory.NewConnectedClient(DB.Pod.PodIP)
-	defer close()
 	if err != nil {
 		return err
 	}
-
+	defer close()
+	
 	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
+	if err != nil {
+		return err
+	}
+	DB.Pod = claimedPod
 	return err
 }
 

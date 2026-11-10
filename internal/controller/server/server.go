@@ -3,6 +3,7 @@ package server
 import (
 	"burstkv/internal/controller"
 	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/core"
 	"errors"
 	"net/http"
 
@@ -27,7 +28,7 @@ func New(ctrl *controller.Controller) *gin.Engine {
 			return
 		}
 		if state == database.NotFound {
-			writeError(c, controller.ErrDatabaseNotFound)
+			writeError(c, core.ErrDatabaseNotFound)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": state.String()})
@@ -70,9 +71,9 @@ func writeResult(c *gin.Context, err error) {
 func writeError(c *gin.Context, err error) {
 	code := http.StatusInternalServerError
 	switch {
-	case errors.Is(err, controller.ErrDatabaseNotFound):
+	case errors.Is(err, core.ErrDatabaseNotFound):
 		code = http.StatusNotFound
-	case errors.Is(err, controller.ErrNoAvailablePods):
+	case errors.Is(err, core.ErrNoAvailablePods):
 		code = http.StatusServiceUnavailable
 	}
 	c.JSON(code, gin.H{"error": err.Error()})
