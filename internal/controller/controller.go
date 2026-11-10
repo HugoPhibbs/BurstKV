@@ -175,18 +175,18 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 		return err
 	}
 
-	client, close, err := c.grpcClientFactory.NewConnectedClient(DB.Pod.PodIP)
+	client, close, err := c.grpcClientFactory.NewConnectedClient(claimedPod.PodIP)
 	if err != nil {
 		return err
 	}
 	defer close()
-	
+
 	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
 	if err != nil {
 		return err
 	}
 	DB.Pod = claimedPod
-	return err
+	return nil
 }
 
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
