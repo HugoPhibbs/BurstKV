@@ -2,9 +2,8 @@ package controller
 
 import (
 	"burstkv/internal/controller/domain/database"
-	"burstkv/internal/controller/pod_manager"
+	"burstkv/internal/controller/pod"
 	"burstkv/internal/core"
-	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
 	"context"
@@ -13,36 +12,49 @@ import (
 	"maps"
 	"slices"
 	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const DB_ID_LENGTH = 8
 
-type PodPorts struct {
-	rpcPort   string
-	proxyPort string
+type PodManager interface {
+	ClaimWarmPod(ctx context.Context) (*pod.Pod, error)
+	DeletePod(ctx context.Context) error
+}
+
+type GRPCClientFactory interface {
+	NewConnectedClient(databasePodIP string) (db_pod_pb.DBPodClient, func() error, error)
+}
+
+type SnapshotStorage interface {
+	DeleteSnapshot(ctx context.Context, databaseID string) error
 }
 
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
-	podManager         *pod_manager.PodManager
+	podManager         PodManager
+	grpcClientFactory  GRPCClientFactory
 	databases          map[string]*database.Database // databaseID -> Database
-	snapShotstorage    *snapshot_storage.SnapshotStorage
-	podPorts           *PodPorts
+	snapShotstorage    SnapshotStorage
+	proxyPort          string
 }
 
 // Creates a new DBManager with the given runtime and idle limit
-func NewController(idleLimit, reaperInterval time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage, podPorts *PodPorts, podManager *pod_manager.PodManager) (*Controller, error) {
+func NewController(
+	idleLimit time.Duration,
+	reaperInterval time.Duration,
+	snapshotStorage SnapshotStorage,
+	proxyPort string,
+	podManager PodManager,
+	grpcClientFactory GRPCClientFactory) (*Controller, error) {
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: reaperInterval,
 		podManager:         podManager,
+		grpcClientFactory:  grpcClientFactory,
 		databases:          make(map[string]*database.Database),
 		snapShotstorage:    snapshotStorage,
-		podPorts:           podPorts,
+		proxyPort:          proxyPort,
 	}, nil
 }
 
@@ -112,7 +124,8 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error
 }
 
 func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
-	client, err := c.databaseRPClient(foundDB.Pod.PodIP)
+	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod.PodIP)
+	defer close()
 	if err != nil {
 		return err
 	}
@@ -163,25 +176,14 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 	}
 
 	DB.Pod = claimedPod
-	client, err := c.databaseRPClient(DB.Pod.PodIP)
+	client, close, err := c.grpcClientFactory.NewConnectedClient(DB.Pod.PodIP)
+	defer close()
 	if err != nil {
 		return err
 	}
 
 	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
 	return err
-}
-
-func (c *Controller) databaseRPClient(databasePodIP string) (db_pod_pb.DBPodClient, error) {
-	conn, err := grpc.NewClient(databasePodIP+":"+c.podPorts.rpcPort,
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	if err != nil {
-		return nil, err
-	}
-
-	client := db_pod_pb.NewDBPodClient(conn)
-	return client, nil
 }
 
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
@@ -218,7 +220,7 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 		}
 	}
 
-	return database.Pod.PodIP, nil
+	return database.Pod.PodIP + ":" + c.proxyPort, nil
 }
 
 func (c *Controller) RecordDatabaseActivity(databaseID string) error {

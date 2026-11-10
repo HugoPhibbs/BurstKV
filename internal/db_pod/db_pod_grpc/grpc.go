@@ -10,16 +10,21 @@ import (
 	"google.golang.org/grpc"
 )
 
-type GRPCServer struct {
+type GRPCClientFactory struct {
+	port string
+}
+
+
+type PodGRPCServer struct {
 	pb.UnimplementedDBPodServer
 	dbPod *db_pod.DBPod
 }
 
-func New(d *db_pod.DBPod) *GRPCServer {
-	return &GRPCServer{dbPod: d}
+func NewPodGRPCServer(d *db_pod.DBPod) *PodGRPCServer {
+	return &PodGRPCServer{dbPod: d}
 }
 
-func (s *GRPCServer) ListenAndServe(addr string) error {
+func (s *PodGRPCServer) ListenAndServe(addr string) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -29,23 +34,23 @@ func (s *GRPCServer) ListenAndServe(addr string) error {
 	return grpcServer.Serve(lis)
 }
 
-func (s *GRPCServer) CreateDatabase(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
+func (s *PodGRPCServer) CreateDatabase(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
 	err := s.dbPod.Assign(ctx, req.GetDatabaseId(), req.GetGetUrl(), req.GetPutUrl(), true)
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
 	return &pb.Empty{}, nil
 }
 
-func (s *GRPCServer) ResumeDatabase(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
+func (s *PodGRPCServer) ResumeDatabase(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
 	err := s.dbPod.Assign(ctx, req.GetDatabaseId(), req.GetGetUrl(), req.GetPutUrl(), false)
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
 	return &pb.Empty{}, nil
 }
 
-func (s *GRPCServer) Stop(ctx context.Context, req *pb.StopRequest) (*pb.Empty, error) {
+func (s *PodGRPCServer) Stop(ctx context.Context, req *pb.StopRequest) (*pb.Empty, error) {
 	if err := s.dbPod.Stop(ctx, req.GetSave()); err != nil {
 		return nil, err
 	}
