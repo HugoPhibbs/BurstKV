@@ -1,4 +1,4 @@
-package grpc_client_factory
+package pod_grpc_client_factory
 
 import (
 	"burstkv/internal/db_pod/db_pod_pb"
@@ -8,15 +8,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type GRPCClientFactory struct {
+type PodGRPCClientFactory struct {
 	port int
 }
 
-func NewGRPCClientFactory(port int) *GRPCClientFactory {
-	return &GRPCClientFactory{port: port}
+func NewPodGRPCClientFactory(port int) *PodGRPCClientFactory {
+	return &PodGRPCClientFactory{port: port}
 }
 
-func (c *GRPCClientFactory) NewConnectedClient(databasePodIP string) (db_pod_pb.DBPodClient, func() error, error) {
+func (c *PodGRPCClientFactory) NewConnectedClient(databasePodIP string) (db_pod_pb.DBPodClient, func() error, error) {
 	conn, err := grpc.NewClient(utils.FormatAddress(databasePodIP, c.port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

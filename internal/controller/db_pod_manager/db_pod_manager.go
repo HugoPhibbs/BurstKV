@@ -1,4 +1,4 @@
-package pod_manager
+package db_pod_manager
 
 import (
 	"burstkv/internal/controller/pod"

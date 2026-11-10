@@ -1,6 +1,7 @@
 package db_pod
 
 import (
+	"burstkv/internal/controller/controller_pb"
 	"context"
 	"errors"
 	"fmt"
@@ -17,22 +18,26 @@ const RDB_DUMP_PATH = "/data/dump.rdb"
 
 var ErrSnapshotNotFound = errors.New("snapshot not found")
 
-type DBPod struct {
-	databaseID string
-	putURL     string
-	redis      *exec.Cmd
-	redisPort int
+type ControllerGRPCClientFactory interface {
+	NewConnectedClient() (controller_pb.ControllerClient, func() error, error)
 }
 
-func NewDBPod(redisPort int) *DBPod {
+type DBPod struct {
+	databaseID    string
+	redis         *exec.Cmd
+	redisPort     int
+	controllerClientFactory ControllerGRPCClientFactory
+}
+
+func NewDBPod(redisPort int, controllerClientFactory ControllerGRPCClientFactory) *DBPod {
 	return &DBPod{
 		redisPort: redisPort,
+		controllerClientFactory: controllerClientFactory,
 	}
 }
 
-func (d *DBPod) Assign(ctx context.Context, databaseID string, getURL string, putURL string, createNew bool) error {
+func (d *DBPod) Assign(ctx context.Context, databaseID string, getURL string, createNew bool) error {
 	d.databaseID = databaseID
-	d.putURL = putURL
 
 	if !createNew {
 		if err := d.loadSnapshot(ctx, getURL); err != nil {
@@ -88,7 +93,17 @@ func (d *DBPod) saveSnapshot(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, d.putURL, f)
+	controllerClient, close, err := d.controllerClientFactory.NewConnectedClient()
+	if err != nil {
+		return err
+	}
+	defer close()
+	res, err := controllerClient.GetSnapshotUploadURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.databaseID})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, res.GetUrl(), f)
 	if err != nil {
 		return err
 	}

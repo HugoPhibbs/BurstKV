@@ -2,27 +2,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "go: build-worker",
+            "label": "protoc: generate (pod)",
             "type": "shell",
-            "command": "go build -o bin/worker.exe ./cmd/worker",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": ["$go"]
-        },
-        {
-            "label": "go: run-worker",
-            "type": "shell",
-            "command": "./bin/worker.exe",
-            "dependsOn": ["protoc: generate", "go: build-worker"],
-            "dependsOrder": "sequence",
+            "command": "protoc --go_out=. --go_opt=module=burstkv --go-grpc_out=. --go-grpc_opt=module=burstkv proto/db_pod.proto",
             "problemMatcher": []
         },
         {
-            "label": "protoc: generate",
+            "label": "protoc: generate (controller)",
             "type": "shell",
-            "command": "protoc --go_out=. --go_opt=module=burstkv --go-grpc_out=. --go-grpc_opt=module=burstkv proto/db_pod.proto",
+            "command": "protoc --go_out=. --go_opt=module=burstkv --go-grpc_out=. --go-grpc_opt=module=burstkv proto/controller.proto",
             "problemMatcher": []
         },
         {

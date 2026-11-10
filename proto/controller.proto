@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package controller;
+
+option go_package = "burstkv/internal/controller/controller_pb";
+
+service Controller {
+  rpc GetSnapshotUploadURL(GetSnapshotUploadURLRequest) returns (GetSnapshotUploadURLResponse);
+}
+message GetSnapshotUploadURLRequest  { string database_id = 1; }
+message GetSnapshotUploadURLResponse { string url = 1; }

@@ -74,6 +74,10 @@ func (s *fakeSnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID str
 	return nil
 }
 
+func (s *fakeSnapshotStorage) PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
+	return "http://snapshots.test/" + databaseID, nil
+}
+
 type testDeps struct {
 	pods      *fakePodManager
 	clients   *fakeClientFactory

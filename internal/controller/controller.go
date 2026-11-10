@@ -21,19 +21,22 @@ type PodManager interface {
 	DeletePod(ctx context.Context, podName string) error
 }
 
-type GRPCClientFactory interface {
+type PodGRPCClientFactory interface {
 	NewConnectedClient(databasePodIP string) (db_pod_pb.DBPodClient, func() error, error)
 }
 
+const SNAPSHOT_UPLOAD_URL_EXPIRY = 5 * time.Minute
+
 type SnapshotStorage interface {
 	DeleteSnapshot(ctx context.Context, databaseID string) error
+	PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error)
 }
 
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
 	podManager         PodManager
-	grpcClientFactory  GRPCClientFactory
+	grpcClientFactory  PodGRPCClientFactory
 	databases          map[string]*database.Database // databaseID -> Database
 	snapShotstorage    SnapshotStorage
 	proxyPort          int
@@ -46,7 +49,7 @@ func NewController(
 	snapshotStorage SnapshotStorage,
 	proxyPort int,
 	podManager PodManager,
-	grpcClientFactory GRPCClientFactory) *Controller {
+	grpcClientFactory PodGRPCClientFactory) *Controller {
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: reaperInterval,
@@ -185,7 +188,7 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 	}
 	defer close()
 
-	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
+	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create })
 	if err != nil {
 		return err
 	}
@@ -228,6 +231,19 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 	}
 
 	return fmt.Sprintf("%s:%d", database.Pod.PodIP, c.proxyPort), nil
+}
+
+// Returns a short-lived presigned URL for uploading the database's snapshot.
+// Only the pod currently assigned to the database (identified by callerIP) may request one.
+func (c *Controller) SnapshotUploadURL(ctx context.Context, databaseID string, callerIP string) (string, error) {
+	db, exists := c.databases[databaseID]
+	if !exists {
+		return "", core.ErrDatabaseNotFound
+	}
+	if !db.IsRunning() || db.Pod.PodIP != callerIP {
+		return "", ErrCallerNotAssignedPod
+	}
+	return c.snapShotstorage.PresignedPutURL(ctx, databaseID, SNAPSHOT_UPLOAD_URL_EXPIRY)
 }
 
 func (c *Controller) RecordDatabaseActivity(databaseID string) error {
