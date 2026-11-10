@@ -1,12 +1,8 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/controlled_worker"
 	"burstkv/internal/controller/domain/database"
 	"burstkv/internal/utils"
-	"burstkv/internal/worker"
-	workergrpc "burstkv/internal/worker/grpc"
-	"burstkv/internal/worker/worker_test"
 	"context"
 	"fmt"
 	"os"

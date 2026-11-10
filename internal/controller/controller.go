@@ -2,6 +2,8 @@ package controller
 
 import (
 	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/controller/pod_manager"
+	"burstkv/internal/core"
 	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
@@ -9,18 +11,11 @@ import (
 	"fmt"
 	"log"
 	"maps"
-	"os"
 	"slices"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const DB_ID_LENGTH = 8
@@ -33,49 +28,22 @@ type PodPorts struct {
 type Controller struct {
 	idleLimit          time.Duration
 	ReaperTimeInterval time.Duration
-	k8s                kubernetes.Interface
-	k8sNameSpace       string
+	podManager         *pod_manager.PodManager
 	databases          map[string]*database.Database // databaseID -> Database
 	snapShotstorage    *snapshot_storage.SnapshotStorage
 	podPorts           *PodPorts
 }
 
 // Creates a new DBManager with the given runtime and idle limit
-func NewController(idleLimit, reaperInterval time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage, podPorts *PodPorts) (*Controller, error) {
-
-	k8s, err := newK8sInterface()
-	if err != nil {
-		return nil, err
-	}
-
+func NewController(idleLimit, reaperInterval time.Duration, snapshotStorage *snapshot_storage.SnapshotStorage, podPorts *PodPorts, podManager *pod_manager.PodManager) (*Controller, error) {
 	return &Controller{
 		idleLimit:          idleLimit,
 		ReaperTimeInterval: reaperInterval,
-		k8s:                k8s,
-		k8sNameSpace:       k8sNamespace(),
+		podManager:         podManager,
 		databases:          make(map[string]*database.Database),
 		snapShotstorage:    snapshotStorage,
 		podPorts:           podPorts,
 	}, nil
-}
-
-func newK8sInterface() (kubernetes.Interface, error) {
-	cfg, err := rest.InClusterConfig()
-	if err == rest.ErrNotInCluster {
-		cfg, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return kubernetes.NewForConfig(cfg)
-}
-
-func k8sNamespace() string {
-	n, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		return "default"
-	}
-	return strings.TrimSpace(string(n))
 }
 
 // Returns the state of the database with the given ID.
@@ -101,7 +69,7 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 	foundDB, exists := c.databases[databaseID]
 
 	if !exists {
-		return ErrDatabaseNotFound
+		return core.ErrDatabaseNotFound
 	}
 
 	if foundDB.IsRunning() {
@@ -135,16 +103,16 @@ func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error {
 	foundDB, exists := c.databases[databaseID]
 	if !exists {
-		return ErrDatabaseNotFound
+		return core.ErrDatabaseNotFound
 	}
 	if !foundDB.IsRunning() {
-		return ErrDatabaseAlreadyPaused
+		return core.ErrDatabaseAlreadyPaused
 	}
 	return c.stopDatabase(ctx, foundDB, true)
 }
 
 func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
-	client, err := c.databaseRPClient(foundDB)
+	client, err := c.databaseRPClient(foundDB.Pod.PodIP)
 	if err != nil {
 		return err
 	}
@@ -165,7 +133,7 @@ func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) erro
 	foundDB, exists := c.databases[databaseID]
 
 	if !exists {
-		return ErrDatabaseNotFound
+		return core.ErrDatabaseNotFound
 	}
 
 	return c.assignDatabase(ctx, foundDB, false)
@@ -186,16 +154,16 @@ func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
 
 func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, create bool) error {
 	if DB.IsRunning() {
-		return ErrDatabaseAlreadyActive
+		return core.ErrDatabaseAlreadyActive
 	}
 
-	pod, err := c.claimWarmPod(ctx)
+	claimedPod, err := c.podManager.ClaimWarmPod(ctx)
 	if err != nil {
 		return err
 	}
 
-	DB.Pod = &database.Pod{PodName: pod.Name, PodIP: pod.Status.PodIP}
-	client, err := c.databaseRPClient(DB)
+	DB.Pod = claimedPod
+	client, err := c.databaseRPClient(DB.Pod.PodIP)
 	if err != nil {
 		return err
 	}
@@ -204,8 +172,8 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 	return err
 }
 
-func (c *Controller) databaseRPClient(database *database.Database) (db_pod_pb.DBPodClient, error) {
-	conn, err := grpc.NewClient(database.Pod.PodIP+":"+c.podPorts.rpcPort,
+func (c *Controller) databaseRPClient(databasePodIP string) (db_pod_pb.DBPodClient, error) {
+	conn, err := grpc.NewClient(databasePodIP+":"+c.podPorts.rpcPort,
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	if err != nil {
@@ -214,27 +182,6 @@ func (c *Controller) databaseRPClient(database *database.Database) (db_pod_pb.DB
 
 	client := db_pod_pb.NewDBPodClient(conn)
 	return client, nil
-}
-
-func (c *Controller) claimWarmPod(ctx context.Context) (*corev1.Pod, error) {
-	pods, err := c.k8s.CoreV1().Pods(c.k8sNameSpace).List(ctx, metav1.ListOptions{
-		LabelSelector: "burstkv/role=warm",
-		FieldSelector: "status.phase=Running",
-	})
-	if err != nil {
-		return nil, err
-	}
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		pod.Labels["burstkv/role"] = "claimed"
-		// Update sends the pod's resourceVersion, so if two claims race,
-		// one gets a Conflict error and moves on to the next pod.
-		claimed, err := c.k8s.CoreV1().Pods(c.k8sNameSpace).Update(ctx, pod, metav1.UpdateOptions{})
-		if err == nil {
-			return claimed, nil
-		}
-	}
-	return nil, ErrNoAvailablePods
 }
 
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
@@ -262,7 +209,7 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
 	database, exists := c.databases[databaseID]
 	if !exists {
-		return "", ErrDatabaseNotFound
+		return "", core.ErrDatabaseNotFound
 	}
 
 	if !database.IsRunning() {
@@ -277,7 +224,7 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 func (c *Controller) RecordDatabaseActivity(databaseID string) error {
 	database, exists := c.databases[databaseID]
 	if !exists {
-		return ErrDatabaseNotFound
+		return core.ErrDatabaseNotFound
 	}
 	database.RecordActivity()
 	return nil

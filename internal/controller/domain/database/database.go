@@ -1,18 +1,14 @@
 package database
 
 import (
+	"burstkv/internal/controller/pod"
 	"sync/atomic"
 	"time"
 )
 
-type Pod struct {
-	PodName string
-	PodIP   string
-}
-
 type Database struct {
 	id             string
-	Pod            *Pod
+	Pod            *pod.Pod
 	latestActivity atomic.Int64 // thread-safe
 }
 
