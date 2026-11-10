@@ -64,9 +64,8 @@ func (p *PodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 		// Update sends the pod's resourceVersion, so if two claims race,
 		// one gets a Conflict error and moves on to the next pod.
 		claimed, err := p.k8s.CoreV1().Pods(p.k8sNameSpace).Update(ctx, foundPod, metav1.UpdateOptions{})
-
-		claimedPod := &pod.Pod{PodName: claimed.Name, PodIP: claimed.Status.PodIP}
 		if err == nil {
+			claimedPod := &pod.Pod{PodName: claimed.Name, PodIP: claimed.Status.PodIP}
 			return claimedPod, nil
 		}
 	}
