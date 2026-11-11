@@ -51,40 +51,40 @@ func (p *RedisProxy) ListenAndServe(ctx context.Context) error {
 	defer ln.Close()
 
 	for {
-		client, err := ln.Accept()
+		clientConn, err := ln.Accept()
 		if err != nil {
 			return err
 		}
-		go p.handle(ctx, client)
+		go p.handle(ctx, clientConn)
 	}
 }
 
-func (p *RedisProxy) handle(ctx context.Context, client net.Conn) {
-	defer client.Close()
+func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
+	defer clientConn.Close()
 
 	// Everything read while parsing is copied into `first`, so it can be replayed upstream as-is.
 	var first bytes.Buffer
-	cmd, err := readCommand(bufio.NewReader(io.TeeReader(client, &first)))
+	cmd, err := readCommand(bufio.NewReader(io.TeeReader(clientConn, &first)))
 	if err != nil {
 		return
 	}
 
 	databaseID := databaseIDFromCommand(cmd)
 	if databaseID == "" {
-		io.WriteString(client, "-NOAUTH connect with redis://:<db-id>@host:port\r\n")
+		io.WriteString(clientConn, "-NOAUTH connect with redis://:<db-id>@host:port\r\n")
 		return
 	}
 
 	addr, err := p.router.RouteDatabase(ctx, databaseID)
 	if err != nil {
-		io.WriteString(client, "-ERR "+err.Error()+"\r\n")
+		io.WriteString(clientConn, "-ERR "+err.Error()+"\r\n")
 		return
 	}
 
 	upstream, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Printf("proxy: dial %s for database %s: %v", addr, databaseID, err)
-		io.WriteString(client, "-ERR database unavailable\r\n")
+		io.WriteString(clientConn, "-ERR database unavailable\r\n")
 		return
 	}
 	defer upstream.Close()
@@ -99,8 +99,8 @@ func (p *RedisProxy) handle(ctx context.Context, client net.Conn) {
 		io.Copy(dst, src)
 		done <- struct{}{}
 	}
-	go pipe(upstream, &activityReader{r: io.MultiReader(&first, client), recordActivity: recordActivity})
-	go pipe(client, upstream)
+	go pipe(upstream, &activityReader{r: io.MultiReader(&first, clientConn), recordActivity: recordActivity})
+	go pipe(clientConn, upstream)
 	<-done
 }
 

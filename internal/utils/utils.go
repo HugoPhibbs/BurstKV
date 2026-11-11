@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Pings rdb until it replies or 10s pass.
+// Pings rdb until it replies or 10s pass. Timeout in seconds
 func WaitForRedis(ctx context.Context, rdb *redis.Client, timeout int) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
