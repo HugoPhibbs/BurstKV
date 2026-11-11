@@ -6,11 +6,19 @@
 	"features": {
 		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {},
 		"ghcr.io/42atomys/devcontainers-features/redis-cli:1": {},
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {"moby": false},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"moby": false
+		},
 		"ghcr.io/devcontainers-extra/features/protoc:1": {},
 		"ghcr.io/devcontainers/features/node:2": {},
 		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		"ghcr.io/dhoeric/features/act:1": {}
 	},
-	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y redis-server"
+	"postCreateCommand": "sudo chown -R vscode:vscode /home/node/.claude && sudo apt-get update && sudo apt-get install -y redis-server",
+	"mounts": [
+		"source=claude-code-config,target=/home/node/.claude,type=volume"
+	],
+	"containerEnv": {
+		"CLAUDE_CONFIG_DIR": "/home/node/.claude"
+	}
 }
