@@ -97,7 +97,8 @@ func newTestController(idleLimit time.Duration, availablePods int) (*Controller,
 // Returns the fake client for the pod the database is (or was last) running on.
 func podClientFor(t *testing.T, c *Controller, d *testDeps, id string) *fakePodClient {
 	t.Helper()
-	db, _ := c.databases.Load(id)
+	db, ok := c.databases.Load(id)
+	require.True(t, ok, "database doesn't exist for the controller")
 	require.NotNil(t, db.Pod, "database %s has no pod", id)
 	return d.clients.clients[db.Pod.PodIP]
 }
