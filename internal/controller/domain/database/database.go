@@ -2,14 +2,17 @@ package database
 
 import (
 	"burstkv/internal/controller/pod"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type Database struct {
+	mu             sync.Mutex
 	id             string
 	Pod            *pod.Pod
 	latestActivity atomic.Int64 // thread-safe
+	IsDeleted bool
 }
 
 func NewDatabase(id string) *Database {
@@ -17,6 +20,14 @@ func NewDatabase(id string) *Database {
 		id: id,
 	}
 }
+
+func (db *Database) Lock() {
+	db.mu.Lock()
+}
+
+func (db *Database) Unlock() {
+	db.mu.Unlock()
+} 
 
 func (db *Database) ID() string {
 	return db.id

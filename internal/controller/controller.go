@@ -67,6 +67,14 @@ func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatu
 	if !exists {
 		return database.NotFound, nil
 	}
+
+	foundDatabase.Lock()
+	defer foundDatabase.Unlock()
+
+	if foundDatabase.IsDeleted {
+		return database.NotFound, nil
+	}
+
 	if foundDatabase.IsRunning() {
 		return database.Running, nil
 	}
@@ -91,6 +99,13 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 		return core.ErrDatabaseNotFound
 	}
 
+	foundDB.Lock()
+	defer foundDB.Unlock()
+
+	if foundDB.IsDeleted {
+		return core.ErrDatabaseNotFound
+	}
+
 	if foundDB.IsRunning() {
 		if err := c.stopDatabase(ctx, foundDB, false); err != nil {
 			return err
@@ -101,6 +116,7 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 		log.Printf("Error occured when deleting a snapshot %v", err)
 	}
 
+	foundDB.IsDeleted = true
 	c.databases.Delete(databaseID)
 
 	return nil
@@ -124,6 +140,13 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error
 	if !exists {
 		return core.ErrDatabaseNotFound
 	}
+	foundDB.Lock()
+	defer foundDB.Unlock()
+
+	if foundDB.IsDeleted {
+		return core.ErrDatabaseNotFound
+	}
+
 	if !foundDB.IsRunning() {
 		return core.ErrDatabaseAlreadyPaused
 	}
@@ -158,6 +181,13 @@ func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) erro
 
 	if !exists {
 		return core.ErrDatabaseNotFound
+	}
+
+	foundDB.Lock()
+	defer foundDB.Unlock()
+
+	if foundDB.IsDeleted { // deleted while we were waiting for a lock
+		return core.ErrDatabaseNotFound 
 	}
 
 	return c.assignDatabase(ctx, foundDB, false)
@@ -204,7 +234,7 @@ func (c *Controller) reapIdleDatabases(ctx context.Context) {
 	for _, db := range c.databases.All() {
 		if db.IsActiveAndIdle(c.idleLimit) {
 			err := c.PauseDatabase(ctx, db.ID())
-			if err != nil {
+			if err != nil {	
 				fmt.Printf("Error pausing idle database %s: %v\n", db.ID(), err)
 			}
 		}
@@ -228,6 +258,13 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 		return "", core.ErrDatabaseNotFound
 	}
 
+	database.Lock()
+	defer database.Unlock()
+
+	if database.IsDeleted {
+		return "", core.ErrDatabaseNotFound
+	}
+
 	if !database.IsRunning() {
 		if err := c.ResumeDatabase(ctx, databaseID); err != nil {
 			return "", err
@@ -244,6 +281,14 @@ func (c *Controller) SnapshotUploadURL(ctx context.Context, databaseID string, c
 	if !exists {
 		return "", core.ErrDatabaseNotFound
 	}
+
+	db.Lock()
+	defer db.Unlock()
+
+	if db.IsDeleted {
+		return "", core.ErrDatabaseNotFound
+	}
+
 	if !db.IsRunning() || db.Pod.PodIP != callerIP {
 		return "", ErrCallerNotAssignedPod
 	}
