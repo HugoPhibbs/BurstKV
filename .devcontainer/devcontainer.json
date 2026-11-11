@@ -1,0 +1,16 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/go .
+{
+	"name": "burstkv",
+	"image": "mcr.microsoft.com/devcontainers/go:2-1.27-trixie",
+	"features": {
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {},
+		"ghcr.io/42atomys/devcontainers-features/redis-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {"moby": false},
+		"ghcr.io/devcontainers-extra/features/protoc:1": {},
+		"ghcr.io/devcontainers/features/node:2": {},
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+		"ghcr.io/dhoeric/features/act:1": {}
+	},
+	"postCreateCommand": "sudo apt-get update && sudo apt-get install -y redis-server"
+}
