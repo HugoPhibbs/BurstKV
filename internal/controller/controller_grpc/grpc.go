@@ -2,8 +2,8 @@ package controller_grpc
 
 import (
 	"burstkv/internal/controller"
-	"burstkv/internal/core"
 	pb "burstkv/internal/controller/controller_pb"
+	"burstkv/internal/core"
 	"context"
 	"errors"
 	"net"
@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type ControllerGRPCServer struct {
@@ -53,4 +54,8 @@ func (s *ControllerGRPCServer) GetSnapshotUploadURL(ctx context.Context, req *pb
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &pb.GetSnapshotUploadURLResponse{Url: url}, nil
+}
+
+func (s *ControllerGRPCServer) RequestMigration(ctx context.Context, req *pb.RequestMigrationRequest) (*emptypb.Empty, error) {
+	return nil, nil // TODO
 }

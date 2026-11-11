@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/puzpuzpuz/xsync/v4"
@@ -168,7 +170,7 @@ func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Databas
 
 	if err := c.podManager.DeletePod(ctx, foundDB.Pod.PodName); err != nil {
 		return err
-		
+
 	}
 	foundDB.Pod = nil
 	return nil
@@ -187,7 +189,7 @@ func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) erro
 	defer foundDB.Unlock()
 
 	if foundDB.IsDeleted { // deleted while we were waiting for a lock
-		return core.ErrDatabaseNotFound 
+		return core.ErrDatabaseNotFound
 	}
 
 	return c.assignDatabase(ctx, foundDB, false)
@@ -222,7 +224,7 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 	}
 	defer close()
 
-	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create })
+	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
 	if err != nil {
 		return err
 	}
@@ -230,11 +232,58 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 	return nil
 }
 
+func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, address string) error {
+	database, ok := c.databases.Load(databaseID)
+	if !ok {
+		return core.ErrDatabaseNotFound
+	}
+	database.Lock()
+	defer database.Unlock()
+
+	if database.IsDeleted {
+		return core.ErrDatabaseNotFound
+	}
+
+	// Find a warm pod to migrate to b
+	claimedPod, err := c.podManager.ClaimWarmPod(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Replicate
+	replicaClient, closeReplica, err := c.grpcClientFactory.NewConnectedClient(claimedPod.PodIP)
+	if err != nil {
+		return err
+	}
+	defer closeReplica()
+
+	_, err = replicaClient.ReplicateDatabase(ctx, &db_pod_pb.ReplicateDatabaseRequest{DatabasedId: databaseID, ReplicaAddress: address})
+	if err != nil {
+		return err
+	}
+
+	// Migrate 
+	primaryClient, closePrimary, err := c.grpcClientFactory.NewConnectedClient(database.Pod.PodIP)
+	if err != nil {
+		return err
+	}
+	defer closePrimary()
+
+	newAddress := net.JoinHostPort(database.Pod.PodIP, strconv.Itoa(c.proxyPort))
+	_, err = primaryClient.MigrateDatabase(ctx, &db_pod_pb.MigrateDatabaseRequest{NewAddress:  newAddress})
+	if err != nil {
+		return err
+	}
+
+	database.Pod = claimedPod
+	return nil
+}
+
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
 	for _, db := range c.databases.All() {
 		if db.IsActiveAndIdle(c.idleLimit) {
 			err := c.PauseDatabase(ctx, db.ID())
-			if err != nil {	
+			if err != nil {
 				fmt.Printf("Error pausing idle database %s: %v\n", db.ID(), err)
 			}
 		}
