@@ -14,7 +14,7 @@
 		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		"ghcr.io/dhoeric/features/act:1": {}
 	},
-	"postCreateCommand": "sudo chown -R vscode:vscode /home/node/.claude && sudo apt-get update && sudo apt-get install -y redis-server",
+	"postCreateCommand": "bash .devcontainer/post-create.sh",
 	"mounts": [
 		"source=claude-code-config,target=/home/node/.claude,type=volume"
 	],
