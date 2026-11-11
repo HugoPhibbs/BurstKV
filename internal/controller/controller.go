@@ -9,9 +9,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"maps"
-	"slices"
 	"time"
+
+	"github.com/puzpuzpuz/xsync/v4"
 )
 
 const DB_ID_LENGTH = 8
@@ -37,7 +37,7 @@ type Controller struct {
 	ReaperTimeInterval time.Duration
 	podManager         PodManager
 	grpcClientFactory  PodGRPCClientFactory
-	databases          map[string]*database.Database // databaseID -> Database
+	databases          *xsync.Map[string, *database.Database] // databaseID -> Database
 	snapShotstorage    SnapshotStorage
 	proxyPort          int
 }
@@ -55,7 +55,7 @@ func NewController(
 		ReaperTimeInterval: reaperInterval,
 		podManager:         podManager,
 		grpcClientFactory:  grpcClientFactory,
-		databases:          make(map[string]*database.Database),
+		databases:          xsync.NewMap[string, *database.Database](),
 		snapShotstorage:    snapshotStorage,
 		proxyPort:          proxyPort,
 	}
@@ -63,7 +63,7 @@ func NewController(
 
 // Returns the state of the database with the given ID.
 func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatus, error) {
-	foundDatabase, exists := c.databases[databaseID]
+	foundDatabase, exists := c.databases.Load(databaseID)
 	if !exists {
 		return database.NotFound, nil
 	}
@@ -75,13 +75,17 @@ func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatu
 
 // Returns a list of all database IDs managed by this DBManager.
 func (c *Controller) GetAllDatabaseIDs() []string {
-	return slices.Collect(maps.Keys(c.databases))
+	ids := make([]string, 0, c.databases.Size())
+	for id := range c.databases.All() {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // Deletes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist.
 func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) error {
-	foundDB, exists := c.databases[databaseID]
+	foundDB, exists := c.databases.Load(databaseID)
 
 	if !exists {
 		return core.ErrDatabaseNotFound
@@ -97,14 +101,14 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 		log.Printf("Error occured when deleting a snapshot %v", err)
 	}
 
-	delete(c.databases, databaseID)
+	c.databases.Delete(databaseID)
 
 	return nil
 }
 
 // Deletes all databases managed by this DBManager.
 func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
-	for id := range c.databases {
+	for id := range c.databases.All() {
 		err := c.DeleteDatabase(ctx, id)
 		if err != nil {
 			return err
@@ -116,7 +120,7 @@ func (c *Controller) DeleteAllDatabases(ctx context.Context) error {
 // Pauses the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyPaused if the database is already paused.
 func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error {
-	foundDB, exists := c.databases[databaseID]
+	foundDB, exists := c.databases.Load(databaseID)
 	if !exists {
 		return core.ErrDatabaseNotFound
 	}
@@ -150,7 +154,7 @@ func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Databas
 // Resumes the database with the given ID.
 // Returns ErrDatabaseNotFound if the database does not exist or ErrDatabaseAlreadyActive if the database is already active.
 func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) error {
-	foundDB, exists := c.databases[databaseID]
+	foundDB, exists := c.databases.Load(databaseID)
 
 	if !exists {
 		return core.ErrDatabaseNotFound
@@ -168,7 +172,7 @@ func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	c.databases[newDatabaseID] = newDB
+	c.databases.Store(newDatabaseID, newDB)
 	return newDatabaseID, nil
 }
 
@@ -197,7 +201,7 @@ func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, 
 }
 
 func (c *Controller) reapIdleDatabases(ctx context.Context) {
-	for _, db := range c.databases {
+	for _, db := range c.databases.All() {
 		if db.IsActiveAndIdle(c.idleLimit) {
 			err := c.PauseDatabase(ctx, db.ID())
 			if err != nil {
@@ -219,7 +223,7 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 }
 
 func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
-	database, exists := c.databases[databaseID]
+	database, exists := c.databases.Load(databaseID)
 	if !exists {
 		return "", core.ErrDatabaseNotFound
 	}
@@ -236,7 +240,7 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 // Returns a short-lived presigned URL for uploading the database's snapshot.
 // Only the pod currently assigned to the database (identified by callerIP) may request one.
 func (c *Controller) SnapshotUploadURL(ctx context.Context, databaseID string, callerIP string) (string, error) {
-	db, exists := c.databases[databaseID]
+	db, exists := c.databases.Load(databaseID)
 	if !exists {
 		return "", core.ErrDatabaseNotFound
 	}
@@ -247,7 +251,7 @@ func (c *Controller) SnapshotUploadURL(ctx context.Context, databaseID string, c
 }
 
 func (c *Controller) RecordDatabaseActivity(databaseID string) error {
-	database, exists := c.databases[databaseID]
+	database, exists := c.databases.Load(databaseID)
 	if !exists {
 		return core.ErrDatabaseNotFound
 	}
