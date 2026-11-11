@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Deliberately not 6379, so tests catch any redis-cli call missing "-p".
@@ -49,6 +50,13 @@ func (mc *MockControllerClient) GetSnapshotUploadURL(
 		return nil, mc.err
 	}
 	return &controller_pb.GetSnapshotUploadURLResponse{Url: mc.url}, nil
+}
+
+func (mc *MockControllerClient) RequestMigration(
+	ctx context.Context,
+	req *controller_pb.RequestMigrationRequest,
+	opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, nil // TODO
 }
 
 // fakeObjectStore stands in for S3 presigned URLs: PUT stores the body, GET returns it (404 if empty).
@@ -145,10 +153,10 @@ func TestAssign_SnapshotNotFound(t *testing.T) {
 	defer srv.Close()
 
 	d := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort}
-	err := d.Assign(t.Context(), "db-1", srv.URL, false)
+	err := d.ResumeDatabase(t.Context(), "db-1", srv.URL)
 
 	require.ErrorIs(t, err, ErrSnapshotNotFound)
-	require.Nil(t, d.redis, "redis should not have been started")
+	require.Nil(t, d.redisServerStartCmd, "redis should not have been started")
 }
 
 func TestStop_NotRunning(t *testing.T) {
@@ -170,7 +178,7 @@ func TestDBPod_TestPausingAndResumingWithSnapshot(t *testing.T) {
 	factory := &mockClientFactory{client: controllerClient}
 
 	pod := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort, controllerClientFactory: factory}
-	require.NoError(t, pod.Assign(ctx, "db-1", "", true))
+	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
 	rdb := newRedisClient("db-1")
@@ -178,12 +186,12 @@ func TestDBPod_TestPausingAndResumingWithSnapshot(t *testing.T) {
 	rdb.Close()
 
 	require.NoError(t, pod.Stop(ctx, true))
-	require.Nil(t, pod.redis)
+	require.Nil(t, pod.redisServerStartCmd)
 	require.Equal(t, "db-1", controllerClient.gotReq.GetDatabaseId())
 	require.NotEmpty(t, store.stored, "snapshot should have been uploaded")
 
 	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort, controllerClientFactory: factory}
-	require.NoError(t, pod2.Assign(ctx, "db-1", srv.URL, false))
+	require.NoError(t, pod2.ResumeDatabase(ctx, "db-1", srv.URL))
 	t.Cleanup(func() { pod2.Stop(context.Background(), false) })
 
 	rdb2 := newRedisClient("db-1")
@@ -198,7 +206,7 @@ func TestDBPod_RequiresPassword(t *testing.T) {
 	ctx := t.Context()
 
 	pod := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort}
-	require.NoError(t, pod.Assign(ctx, "db-1", "", true))
+	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
 	wrong := newRedisClient("not-the-password")
@@ -211,16 +219,16 @@ func TestDBPod_StopWithSave_UploadFails(t *testing.T) {
 	ctx := t.Context()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden) 
+		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer srv.Close()
 
 	factory := &mockClientFactory{client: &MockControllerClient{url: srv.URL}}
 	pod := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort, controllerClientFactory: factory}
-	require.NoError(t, pod.Assign(ctx, "db-1", "", true))
+	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
 	err := pod.Stop(ctx, true)
 	require.ErrorContains(t, err, "upload snapshot")
-	require.NotNil(t, pod.redis, "redis should keep running if the save failed")
+	require.NotNil(t, pod.redisServerStartCmd, "redis should keep running if the save failed")
 }

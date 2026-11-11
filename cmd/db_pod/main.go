@@ -54,7 +54,7 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 25 * time.Second)
 	defer cancel()
 	log.Println("Performing shutdown (gracefully)")
-	if err = db.Stop(shutdownCtx, true); err != nil {
+	if err = db.HandleTermination(shutdownCtx, true); err != nil {
 		log.Println(err)
 	}
 }
