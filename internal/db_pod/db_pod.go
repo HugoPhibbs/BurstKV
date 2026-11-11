@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const RDB_DUMP_PATH = "/data/dump.rdb"
+const DEFAULT_DATA_DIR = "/data"
 
 var ErrSnapshotNotFound = errors.New("snapshot not found")
 
@@ -26,14 +27,20 @@ type DBPod struct {
 	databaseID    string
 	redis         *exec.Cmd
 	redisPort     int
+	dataDir       string
 	controllerClientFactory ControllerGRPCClientFactory
 }
 
 func NewDBPod(redisPort int, controllerClientFactory ControllerGRPCClientFactory) *DBPod {
 	return &DBPod{
 		redisPort: redisPort,
+		dataDir:   DEFAULT_DATA_DIR,
 		controllerClientFactory: controllerClientFactory,
 	}
+}
+
+func (d *DBPod) dumpPath() string {
+	return filepath.Join(d.dataDir, "dump.rdb")
 }
 
 func (d *DBPod) Assign(ctx context.Context, databaseID string, getURL string, createNew bool) error {
@@ -46,7 +53,7 @@ func (d *DBPod) Assign(ctx context.Context, databaseID string, getURL string, cr
 	}
 
 	// Not CommandContext: redis must outlive the request that started it.
-	cmd := exec.Command("redis-server", "--dir", "/data", "--port", strconv.Itoa(d.redisPort), "--requirepass", databaseID)
+	cmd := exec.Command("redis-server", "--dir", d.dataDir, "--port", strconv.Itoa(d.redisPort), "--requirepass", databaseID)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -65,7 +72,7 @@ func (d *DBPod) waitForRedisReady(ctx context.Context) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		out, err := exec.CommandContext(ctx, "redis-cli", "-a", d.databaseID, "--no-auth-warning", "PING").Output()
+		out, err := exec.CommandContext(ctx, "redis-cli", "-p", strconv.Itoa(d.redisPort), "-a", d.databaseID, "--no-auth-warning", "PING").Output()
 		if err == nil && strings.TrimSpace(string(out)) == "PONG" {
 			return nil
 		}
@@ -78,11 +85,11 @@ func (d *DBPod) waitForRedisReady(ctx context.Context) error {
 }
 
 func (d *DBPod) saveSnapshot(ctx context.Context) error {
-	if err := exec.CommandContext(ctx, "redis-cli", "-a", d.databaseID, "--no-auth-warning", "SAVE").Run(); err != nil {
+	if err := exec.CommandContext(ctx, "redis-cli", "-p", strconv.Itoa(d.redisPort), "-a", d.databaseID, "--no-auth-warning", "SAVE").Run(); err != nil {
 		return err
 	}
 
-	f, err := os.Open(RDB_DUMP_PATH)
+	f, err := os.Open(d.dumpPath())
 	if err != nil {
 		return err
 	}
@@ -138,13 +145,13 @@ func (d *DBPod) loadSnapshot(ctx context.Context, getURL string) error {
 		return fmt.Errorf("download snapshot: %s", resp.Status)
 	}
 
-	f, err := os.Create(RDB_DUMP_PATH)
+	f, err := os.Create(d.dumpPath())
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		f.Close()
-		os.Remove(RDB_DUMP_PATH)
+		os.Remove(d.dumpPath())
 		return err
 	}
 	return f.Close()
@@ -152,7 +159,7 @@ func (d *DBPod) loadSnapshot(ctx context.Context, getURL string) error {
 
 func (d *DBPod) Stop(ctx context.Context, save bool) error {
 	if d.redis == nil {
-		return nil
+		return ErrNoDatabaseRunningOnPod
 	}
 	if save {
 		if err := d.saveSnapshot(ctx); err != nil {
@@ -160,7 +167,7 @@ func (d *DBPod) Stop(ctx context.Context, save bool) error {
 		}
 	}
 
-	if err := exec.CommandContext(ctx, "redis-cli", "-a", d.databaseID, "--no-auth-warning", "SHUTDOWN", "NOSAVE").Run(); err != nil {
+	if err := exec.CommandContext(ctx, "redis-cli", "-p", strconv.Itoa(d.redisPort), "-a", d.databaseID, "--no-auth-warning", "SHUTDOWN", "NOSAVE").Run(); err != nil {
 		return err
 	}
 
