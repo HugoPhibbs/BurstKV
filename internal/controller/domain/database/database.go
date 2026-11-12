@@ -12,7 +12,7 @@ type Database struct {
 	id             string
 	Pod            *pod.Pod
 	latestActivity atomic.Int64 // thread-safe
-	IsDeleted bool
+	IsDeleted      bool
 }
 
 func NewDatabase(id string) *Database {
@@ -27,7 +27,7 @@ func (db *Database) Lock() {
 
 func (db *Database) Unlock() {
 	db.mu.Unlock()
-} 
+}
 
 func (db *Database) ID() string {
 	return db.id

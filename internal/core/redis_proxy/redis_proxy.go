@@ -10,6 +10,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Max args / bytes per arg accepted in the first command, so a bad client can't make us allocate huge buffers.
@@ -75,7 +76,10 @@ func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
 		return
 	}
 
-	addr, err := p.router.RouteDatabase(ctx, databaseID)
+	routeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	addr, err := p.router.RouteDatabase(routeCtx, databaseID)
+
 	if err != nil {
 		io.WriteString(clientConn, "-ERR "+err.Error()+"\r\n")
 		return

@@ -32,6 +32,7 @@ const SNAPSHOT_UPLOAD_URL_EXPIRY = 5 * time.Minute
 type SnapshotStorage interface {
 	DeleteSnapshot(ctx context.Context, databaseID string) error
 	PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error)
+	PresignedGetURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error)
 }
 
 type Controller struct {
@@ -188,11 +189,37 @@ func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) erro
 	foundDB.Lock()
 	defer foundDB.Unlock()
 
-	if foundDB.IsDeleted { // deleted while we were waiting for a lock
+	if foundDB.IsRunning() {
+		return core.ErrDatabaseAlreadyActive
+	}
+
+	return c.resumeDatabaseHelper(ctx, foundDB)
+}
+
+func (c *Controller) resumeDatabaseHelper(ctx context.Context, DB *database.Database) error {
+	if DB.IsDeleted {
 		return core.ErrDatabaseNotFound
 	}
 
-	return c.assignDatabase(ctx, foundDB, false)
+	claimedPod, podClient, close, err := c.ClaimWarmPodClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	getUrl, err := c.snapShotstorage.PresignedGetURL(ctx, DB.ID(), 5*time.Minute)
+	if err != nil {
+		return nil
+	}
+
+	_, err = podClient.ResumeDatabase(ctx, &db_pod_pb.ResumeDatabaseRequest{DatabaseId: DB.ID(), GetUrl: getUrl})
+
+	if err != nil {
+		return err
+	}
+
+	DB.Pod = claimedPod
+	return nil
 }
 
 // Creates a new database and returns the new database ID
@@ -200,36 +227,34 @@ func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
 	newDatabaseID := utils.RandomString(DB_ID_LENGTH)
 	newDB := database.NewDatabase(newDatabaseID)
 
-	if err := c.assignDatabase(ctx, newDB, true); err != nil {
+	claimedPod, podClient, close, err := c.ClaimWarmPodClient(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer close()
+
+	_, err = podClient.CreateDatabase(ctx, &db_pod_pb.CreateDatabaseRequest{DatabaseId: newDatabaseID})
+
+	if err != nil {
 		return "", err
 	}
 
+	newDB.Pod = claimedPod
 	c.databases.Store(newDatabaseID, newDB)
 	return newDatabaseID, nil
 }
 
-func (c *Controller) assignDatabase(ctx context.Context, DB *database.Database, create bool) error {
-	if DB.IsRunning() {
-		return core.ErrDatabaseAlreadyActive
-	}
-
+func (c *Controller) ClaimWarmPodClient(ctx context.Context) (*pod.Pod, db_pod_pb.DBPodClient, func() error, error) {
 	claimedPod, err := c.podManager.ClaimWarmPod(ctx)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 
 	client, close, err := c.grpcClientFactory.NewConnectedClient(claimedPod.PodIP)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
-	defer close()
-
-	_, err = client.Assign(ctx, &db_pod_pb.AssignDatabaseRequest{DatabaseId: DB.ID(), Create: create})
-	if err != nil {
-		return err
-	}
-	DB.Pod = claimedPod
-	return nil
+	return claimedPod, client, close, nil
 }
 
 func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, address string) error {
@@ -262,7 +287,7 @@ func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, add
 		return err
 	}
 
-	// Migrate 
+	// Migrate
 	primaryClient, closePrimary, err := c.grpcClientFactory.NewConnectedClient(database.Pod.PodIP)
 	if err != nil {
 		return err
@@ -270,7 +295,7 @@ func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, add
 	defer closePrimary()
 
 	newAddress := net.JoinHostPort(database.Pod.PodIP, strconv.Itoa(c.proxyPort))
-	_, err = primaryClient.MigrateDatabase(ctx, &db_pod_pb.MigrateDatabaseRequest{NewAddress:  newAddress})
+	_, err = primaryClient.MigrateDatabase(ctx, &db_pod_pb.MigrateDatabaseRequest{NewAddress: newAddress})
 	if err != nil {
 		return err
 	}
@@ -301,26 +326,27 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 	}()
 }
 
+// Routes a database to it's pod address. Context should be timed
 func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
-	database, exists := c.databases.Load(databaseID)
+	foundDB, exists := c.databases.Load(databaseID)
 	if !exists {
 		return "", core.ErrDatabaseNotFound
 	}
 
-	database.Lock()
-	defer database.Unlock()
+	foundDB.Lock()
+	defer foundDB.Unlock()
 
-	if database.IsDeleted {
+	if foundDB.IsDeleted {
 		return "", core.ErrDatabaseNotFound
 	}
 
-	if !database.IsRunning() {
-		if err := c.ResumeDatabase(ctx, databaseID); err != nil {
+	if !foundDB.IsRunning() {
+		if err := c.resumeDatabaseHelper(ctx, foundDB); err != nil {
 			return "", err
 		}
 	}
 
-	return fmt.Sprintf("%s:%d", database.Pod.PodIP, c.proxyPort), nil
+	return fmt.Sprintf("%s:%d", foundDB.Pod.PodIP, c.proxyPort), nil
 }
 
 // Returns a short-lived presigned URL for uploading the database's snapshot.
