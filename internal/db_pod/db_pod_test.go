@@ -18,9 +18,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Deliberately not 6379, so tests catch any redis-cli call missing "-p".
-const testRedisPort = 6390
-
 type mockClientFactory struct {
 	client controller_pb.ControllerClient
 	err    error
@@ -59,13 +56,13 @@ func (mc *MockControllerClient) RequestMigration(
 	return nil, nil // TODO
 }
 
-// fakeObjectStore stands in for S3 presigned URLs: PUT stores the body, GET returns it (404 if empty).
-type fakeObjectStore struct {
+// fakeSnapshotStorage stands in for S3 presigned URLs: PUT stores the body, GET returns it (404 if empty).
+type fakeSnapshotStorage struct {
 	mu     sync.Mutex
 	stored []byte
 }
 
-func (s *fakeObjectStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *fakeSnapshotStorage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch r.Method {
@@ -96,9 +93,9 @@ func requireRedis(t *testing.T) {
 	}
 }
 
-func newRedisClient(databaseID string) *redis.Client {
+func newRedisClient(databaseID string, port int) *redis.Client {
 	return redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("localhost:%d", testRedisPort),
+		Addr:     fmt.Sprintf("localhost:%d", port),
 		Password: databaseID,
 	})
 }
@@ -149,10 +146,11 @@ func TestLoadSnapshot(t *testing.T) {
 
 func TestAssign_SnapshotNotFound(t *testing.T) {
 	// loadSnapshot fails before redis is started, so no redis binary is needed.
-	srv := httptest.NewServer(&fakeObjectStore{})
+	srv := httptest.NewServer(&fakeSnapshotStorage{})
 	defer srv.Close()
-
-	d := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort}
+	
+	port := 6390
+	d := &DBPod{dataDir: t.TempDir(), redisPort: port}
 	err := d.ResumeDatabase(t.Context(), "db-1", srv.URL)
 
 	require.ErrorIs(t, err, ErrSnapshotNotFound)
@@ -170,18 +168,19 @@ func TestDBPod_TestPausingAndResumingWithSnapshot(t *testing.T) {
 	requireRedis(t)
 	ctx := t.Context()
 
-	store := &fakeObjectStore{}
+	store := &fakeSnapshotStorage{}
 	srv := httptest.NewServer(store)
 	defer srv.Close()
 
 	controllerClient := &MockControllerClient{url: srv.URL}
 	factory := &mockClientFactory{client: controllerClient}
 
-	pod := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort, controllerClientFactory: factory}
+	port := 6390
+	pod := &DBPod{dataDir: t.TempDir(), redisPort: port, controllerClientFactory: factory}
 	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
-	rdb := newRedisClient("db-1")
+	rdb := newRedisClient("db-1", port)
 	require.NoError(t, rdb.Set(ctx, "k", "v", 0).Err())
 	rdb.Close()
 
@@ -190,11 +189,11 @@ func TestDBPod_TestPausingAndResumingWithSnapshot(t *testing.T) {
 	require.Equal(t, "db-1", controllerClient.gotReq.GetDatabaseId())
 	require.NotEmpty(t, store.stored, "snapshot should have been uploaded")
 
-	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort, controllerClientFactory: factory}
+	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: port, controllerClientFactory: factory}
 	require.NoError(t, pod2.ResumeDatabase(ctx, "db-1", srv.URL))
 	t.Cleanup(func() { pod2.Stop(context.Background(), false) })
 
-	rdb2 := newRedisClient("db-1")
+	rdb2 := newRedisClient("db-1", port)
 	defer rdb2.Close()
 	got, err := rdb2.Get(ctx, "k").Result()
 	require.NoError(t, err)
@@ -205,13 +204,14 @@ func TestDBPod_RequiresPassword(t *testing.T) {
 	requireRedis(t)
 	ctx := t.Context()
 
-	pod := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort}
+	port := 6390
+	pod := &DBPod{dataDir: t.TempDir(), redisPort: port}
 	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
-	wrong := newRedisClient("not-the-password")
-	defer wrong.Close()
-	require.Error(t, wrong.Ping(ctx).Err())
+	wrongClient := newRedisClient("not-the-password", port)
+	defer wrongClient.Close()
+	require.Error(t, wrongClient.Ping(ctx).Err())
 }
 
 func TestDBPod_StopWithSave_UploadFails(t *testing.T) {
@@ -223,12 +223,53 @@ func TestDBPod_StopWithSave_UploadFails(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	port := 6390
 	factory := &mockClientFactory{client: &MockControllerClient{url: srv.URL}}
-	pod := &DBPod{dataDir: t.TempDir(), redisPort: testRedisPort, controllerClientFactory: factory}
+	pod := &DBPod{dataDir: t.TempDir(), redisPort: port, controllerClientFactory: factory}
 	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
 	err := pod.Stop(ctx, true)
 	require.ErrorContains(t, err, "upload snapshot")
 	require.NotNil(t, pod.redisServerStartCmd, "redis should keep running if the save failed")
+}
+
+func TestDBPod_TestReplicating(t *testing.T) {
+	requireRedis(t)
+	ctx := t.Context()
+
+	port1 := 6390
+	pod1 := &DBPod{dataDir: t.TempDir(), redisPort: port1}
+	require.NoError(t, pod1.CreateDatabase(ctx, "db-1"))
+	t.Cleanup(func() { pod1.Stop(context.Background(), false) })
+
+	port2 := 6391
+	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: port2}
+	t.Cleanup(func() { pod2.Stop(context.Background(), false) })
+
+	client1 := newRedisClient("db-1", port1)
+	defer client1.Close()
+
+	valKeys := map[string]string{"a": "1", "b": "2", "c": "3"}
+
+	for k, v := range valKeys {
+		require.NoError(t, client1.Set(ctx, k, v, 0).Err())
+	}
+
+	require.NoError(t, pod2.ReplicateDatabase(ctx, "db-1", fmt.Sprintf("localhost:%d", port1)))
+
+	client2 := newRedisClient("db-1", port2)
+	defer client2.Close()
+
+	for k, v := range valKeys {
+		got, err := client2.Get(ctx, k).Result()
+		require.NoError(t, err)
+		require.Equal(t, v, got)
+	}
+
+	require.Equal(t, "db-1", pod2.DatabaseID)
+}
+
+func TestDBPod_TestMigrating(t *testing.T) {
+	// TODO
 }

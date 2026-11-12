@@ -29,7 +29,7 @@ type ControllerGRPCClientFactory interface {
 }
 
 type DBPod struct {
-	databaseID              string
+	DatabaseID              string
 	redisServerStartCmd     *exec.Cmd
 	redisPort               int
 	redisClient             *redis.Client
@@ -50,13 +50,13 @@ func (d *DBPod) dumpPath() string {
 }
 
 func (d *DBPod) CreateDatabase(ctx context.Context, databaseID string) error {
-	d.databaseID = databaseID
-	
+	d.DatabaseID = databaseID
+
 	return d.startRedisServer(ctx, databaseID, nil)
 }
 
 func (d *DBPod) ResumeDatabase(ctx context.Context, databaseID string, getURL string) error {
-	d.databaseID = databaseID
+	d.DatabaseID = databaseID
 
 	if err := d.loadSnapshot(ctx, getURL); err != nil {
 		return err
@@ -65,28 +65,48 @@ func (d *DBPod) ResumeDatabase(ctx context.Context, databaseID string, getURL st
 	return d.startRedisServer(ctx, databaseID, nil)
 }
 
-func (d *DBPod) ReplicateDatabase(ctx context.Context, databaseID string, replicaAddress string) error {
-	d.databaseID = databaseID
-
+// Replicates the contents of another database into this pod
+func (d *DBPod) ReplicateDatabase(ctx context.Context, replicaDatabaseID string, replicaAddress string) error {
 	host, port, err := net.SplitHostPort(replicaAddress)
 	if err != nil {
 		return err
 	}
 
-	extraArgs := []string{"--replicaof", host, port, "--masterauth", databaseID}
+	extraArgs := []string{"--replicaof", host, port, "--masterauth", replicaDatabaseID}
 
-	if err := d.startRedisServer(ctx, databaseID, extraArgs); err != nil {
+	if err := d.startRedisServer(ctx, replicaDatabaseID, extraArgs); err != nil {
 		return err
 	}
 
-	return pollUntil(ctx, 100*time.Millisecond, func(ctx context.Context) bool {
+	err = pollUntil(ctx, 100*time.Millisecond, func(ctx context.Context) bool {
 		info, err := d.replicationInfo(ctx)
 		return err == nil && info["master_link_status"] == "up" && info["master_sync_in_progress"] == "0"
+	})
+
+	if err != nil {
+		return err
+	}
+
+	d.DatabaseID = replicaDatabaseID
+
+	return nil
+}
+
+func (d *DBPod) newRedisClient(password string) *redis.Client {
+	return redis.NewClient(&redis.Options{
+		Addr:     "localhost:" + strconv.Itoa(d.redisPort),
+		Password: password,
 	})
 }
 
 func (d *DBPod) startRedisServer(ctx context.Context, password string, extraArgs []string) error {
-	args := []string{"--dir", d.dataDir, "--port", strconv.Itoa(d.redisPort), "--requirepass", password}
+	args := []string{
+		"--dir", d.dataDir,
+		"--port", strconv.Itoa(d.redisPort),
+		"--requirepass", password,
+		// Remove sync delay, see https://redis.io/docs/latest/operate/oss_and_stack/management/replication/#configuration
+		"--repl-diskless-sync-delay", "0", 
+	}
 	args = append(args, extraArgs...)
 	cmd := exec.Command("redis-server", args...)
 	if err := cmd.Start(); err != nil {
@@ -97,10 +117,7 @@ func (d *DBPod) startRedisServer(ctx context.Context, password string, extraArgs
 	readyCtx, cancel := context.WithTimeout(ctx, REDIS_START_TIMEOUT)
 	defer cancel()
 
-	d.redisClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:" + strconv.Itoa(d.redisPort),
-		Password: password,
-	})
+	d.redisClient = d.newRedisClient(password)
 
 	err := pollUntil(readyCtx, 100*time.Millisecond, func(ctx context.Context) bool {
 		return d.redisClient.Ping(ctx).Err() == nil
@@ -206,7 +223,7 @@ func (d *DBPod) saveSnapshot(ctx context.Context) error {
 		return err
 	}
 	defer close()
-	res, err := controllerClient.GetSnapshotUploadURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.databaseID})
+	res, err := controllerClient.GetSnapshotUploadURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.DatabaseID})
 	if err != nil {
 		return err
 	}
@@ -268,13 +285,19 @@ func (d *DBPod) Stop(ctx context.Context, save bool) error {
 		}
 	}
 
-	if err := d.redisClient.ShutdownNoSave(ctx).Err(); err != nil {
+	// By default, a client tries to reconnect to the server, even after it's shutdown (?)
+	// So create a new client that doesn't try to reconnect.
+	shutdownClient := d.newRedisClient(d.DatabaseID)
+	shutdownClient.Options().MaxRetries = 0
+
+	if err := shutdownClient.ShutdownNoSave(ctx).Err(); err != nil {
 		return err
 	}
 
 	err := d.redisServerStartCmd.Wait()
 	d.redisServerStartCmd = nil
 	d.redisClient.Close()
+	shutdownClient.Close()
 	d.redisClient = nil
 	return err
 }
@@ -288,6 +311,6 @@ func (d *DBPod) HandleTermination(ctx context.Context, save bool) error {
 		return d.saveSnapshot(ctx)
 	}
 	defer closeConn()
-	_, err = client.RequestMigration(ctx, &controller_pb.RequestMigrationRequest{DatabaseId: d.databaseID})
+	_, err = client.RequestMigration(ctx, &controller_pb.RequestMigrationRequest{DatabaseId: d.DatabaseID})
 	return err
 }
