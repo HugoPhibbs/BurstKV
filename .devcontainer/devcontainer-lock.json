@@ -38,6 +38,11 @@
       "resolved": "ghcr.io/devcontainers/features/node@sha256:20ac718cc67e7999a9d3fbb8387f1a3a5d53ecbd41fe7c075ebadb8e9b431b17",
       "integrity": "sha256:20ac718cc67e7999a9d3fbb8387f1a3a5d53ecbd41fe7c075ebadb8e9b431b17"
     },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "1.8.1",
+      "resolved": "ghcr.io/devcontainers/features/python@sha256:7b35df4ff12f378effab187341b1b1b2373de6dd6d027d87aa77dd246c62b517",
+      "integrity": "sha256:7b35df4ff12f378effab187341b1b1b2373de6dd6d027d87aa77dd246c62b517"
+    },
     "ghcr.io/dhoeric/features/act:1": {
       "version": "1.0.0",
       "resolved": "ghcr.io/dhoeric/features/act@sha256:2e99eed677768dff36de20e856f2f6fd285a30ea868dae229e848a2871c4462d",

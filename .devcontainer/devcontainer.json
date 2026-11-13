@@ -12,7 +12,8 @@
 		"ghcr.io/devcontainers-extra/features/protoc:1": {},
 		"ghcr.io/devcontainers/features/node:2": {},
 		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
-		"ghcr.io/dhoeric/features/act:1": {}
+		"ghcr.io/dhoeric/features/act:1": {},
+		"ghcr.io/devcontainers/features/python:1": {}
 	},
 	"postCreateCommand": "bash .devcontainer/post-create.sh",
 	"mounts": [
