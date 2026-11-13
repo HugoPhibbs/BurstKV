@@ -6,7 +6,7 @@
 	"features": {
 		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {},
 		"ghcr.io/42atomys/devcontainers-features/redis-cli:1": {},
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
 			"moby": false
 		},
 		"ghcr.io/devcontainers-extra/features/protoc:1": {},
