@@ -66,8 +66,8 @@ func (d *DBPod) ResumeDatabase(ctx context.Context, databaseID string, getURL st
 }
 
 // Replicates the contents of another database into this pod
-func (d *DBPod) ReplicateDatabase(ctx context.Context, replicaDatabaseID string, replicaAddress string) error {
-	host, port, err := net.SplitHostPort(replicaAddress)
+func (d *DBPod) ReplicateDatabase(ctx context.Context, replicaDatabaseID string, primaryAddress string) error {
+	host, port, err := net.SplitHostPort(primaryAddress)
 	if err != nil {
 		return err
 	}
@@ -104,8 +104,9 @@ func (d *DBPod) startRedisServer(ctx context.Context, password string, extraArgs
 		"--dir", d.dataDir,
 		"--port", strconv.Itoa(d.redisPort),
 		"--requirepass", password,
+		"--masterauth", password, // for during a failover, this becomes the slave
 		// Remove sync delay, see https://redis.io/docs/latest/operate/oss_and_stack/management/replication/#configuration
-		"--repl-diskless-sync-delay", "0", 
+		"--repl-diskless-sync-delay", "0",
 	}
 	args = append(args, extraArgs...)
 	cmd := exec.Command("redis-server", args...)
@@ -148,7 +149,7 @@ func (d *DBPod) MigrateDatabase(ctx context.Context, newAddress string) error {
 	// Send the FAILOVER request
 	reply, err := d.redisClient.Do(ctx, "FAILOVER", "TO", host, port, "TIMEOUT", strconv.Itoa(DEFAULT_MIGRATION_TIMEOUT)).Text()
 	if reply != "OK" || err != nil {
-		return ErrFailoverRejected
+		return err
 	}
 
 	// Wait for the FAILOVER to be completed
