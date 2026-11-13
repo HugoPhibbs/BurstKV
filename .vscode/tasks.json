@@ -24,17 +24,23 @@
             "type": "shell",
             "command": "python scripts/start_dev_snapshot_server.py",
             "problemMatcher": []
-        }, 
+        },
         {
-            "label": "tests (all)", 
+            "label": "tests (all)",
             "type": "shell",
             "command": "go test ./... -v",
             "problemMatcher": []
         },
         {
             "label": "Build db image",
-            "type": "shell", 
+            "type": "shell",
             "command": "docker build -f docker/Dockerfile.db_pod -t burstkv-dbpod:${input:imageVersion} .",
+            "problemMatcher": []
+        },
+        {
+            "label": "start dev cluster",
+            "type": "shell",
+            "command": "chmod +x ./scripts/dev_start.sh && ./scripts/dev_start.sh",
             "problemMatcher": []
         },
     ],
