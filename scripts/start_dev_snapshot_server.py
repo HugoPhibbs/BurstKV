@@ -5,10 +5,10 @@ import subprocess
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the development snapshot server.")
     parser.add_argument("--detached", "-d", action="store_true", help="Run the snapshot server in detached mode")
-    parser.add_argument("--api-port", type=int, default=9000, help="Host port for the snapshot server (default: 9000)")
+    parser.add_argument("--api-port", "-p", type=int, default=9000, help="Host port for the snapshot server (default: 9000)")
     parser.add_argument("--console-port", type=int, default=9001, help="Host port for the snapshot server console (default: 9001)")
-    parser.add_argument("--access-key", type=str, default="dev_access_key", help="Access key for the snapshot server (default: dev_access_key)")
-    parser.add_argument("--secret-key", type=str, default="dev_secret_key", help="Secret key for the snapshot server (default: dev_secret_key)")
+    parser.add_argument("--access-key", "-ak", type=str, default="dev_access_key", help="Access key for the snapshot server (default: dev_access_key)")
+    parser.add_argument("--secret-key", "-sk", type=str, default="dev_secret_key", help="Secret key for the snapshot server (default: dev_secret_key)")
     args = parser.parse_args()
 
     cwd = os.getcwd()
