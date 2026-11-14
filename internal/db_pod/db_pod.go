@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,9 +14,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const DEFAULT_DATA_DIR = "/data"
+const DEFAULT_MIGRATION_TIMEOUT = 5000 // ms, since Redis uses these units (not native Go time duration)
+const REDIS_START_TIMEOUT = 10 * time.Second
 
 var ErrSnapshotNotFound = errors.New("snapshot not found")
 
@@ -24,17 +29,18 @@ type ControllerGRPCClientFactory interface {
 }
 
 type DBPod struct {
-	databaseID    string
-	redis         *exec.Cmd
-	redisPort     int
-	dataDir       string
+	DatabaseID              string
+	redisServerStartCmd     *exec.Cmd
+	redisPort               int
+	redisClient             *redis.Client
+	dataDir                 string
 	controllerClientFactory ControllerGRPCClientFactory
 }
 
 func NewDBPod(redisPort int, controllerClientFactory ControllerGRPCClientFactory) *DBPod {
 	return &DBPod{
-		redisPort: redisPort,
-		dataDir:   DEFAULT_DATA_DIR,
+		redisPort:               redisPort,
+		dataDir:                 DEFAULT_DATA_DIR,
 		controllerClientFactory: controllerClientFactory,
 	}
 }
@@ -43,49 +49,162 @@ func (d *DBPod) dumpPath() string {
 	return filepath.Join(d.dataDir, "dump.rdb")
 }
 
-func (d *DBPod) Assign(ctx context.Context, databaseID string, getURL string, createNew bool) error {
-	d.databaseID = databaseID
+func (d *DBPod) CreateDatabase(ctx context.Context, databaseID string) error {
+	d.DatabaseID = databaseID
 
-	if !createNew {
-		if err := d.loadSnapshot(ctx, getURL); err != nil {
-			return err
-		}
+	return d.startRedisServer(ctx, databaseID, nil)
+}
+
+func (d *DBPod) ResumeDatabase(ctx context.Context, databaseID string, getURL string) error {
+	d.DatabaseID = databaseID
+
+	if err := d.loadSnapshot(ctx, getURL); err != nil {
+		return err
 	}
 
-	// Not CommandContext: redis must outlive the request that started it.
-	cmd := exec.Command("redis-server", "--dir", d.dataDir, "--port", strconv.Itoa(d.redisPort), "--requirepass", databaseID)
+	return d.startRedisServer(ctx, databaseID, nil)
+}
+
+// Replicates the contents of another database into this pod
+func (d *DBPod) ReplicateDatabase(ctx context.Context, replicaDatabaseID string, primaryAddress string) error {
+	host, port, err := net.SplitHostPort(primaryAddress)
+	if err != nil {
+		return err
+	}
+
+	extraArgs := []string{"--replicaof", host, port, "--masterauth", replicaDatabaseID}
+
+	if err := d.startRedisServer(ctx, replicaDatabaseID, extraArgs); err != nil {
+		return err
+	}
+
+	err = pollUntil(ctx, 100*time.Millisecond, func(ctx context.Context) bool {
+		info, err := d.replicationInfo(ctx)
+		return err == nil && info["master_link_status"] == "up" && info["master_sync_in_progress"] == "0"
+	})
+
+	if err != nil {
+		return err
+	}
+
+	d.DatabaseID = replicaDatabaseID
+
+	return nil
+}
+
+func (d *DBPod) newRedisClient(password string) *redis.Client {
+	return redis.NewClient(&redis.Options{
+		Addr:     "localhost:" + strconv.Itoa(d.redisPort),
+		Password: password,
+	})
+}
+
+func (d *DBPod) startRedisServer(ctx context.Context, password string, extraArgs []string) error {
+	args := []string{
+		"--dir", d.dataDir,
+		"--port", strconv.Itoa(d.redisPort),
+		"--requirepass", password,
+		"--masterauth", password, // for during a failover, this becomes the slave
+		// Remove sync delay, see https://redis.io/docs/latest/operate/oss_and_stack/management/replication/#configuration
+		"--repl-diskless-sync-delay", "0",
+	}
+	args = append(args, extraArgs...)
+	cmd := exec.Command("redis-server", args...)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	d.redis = cmd
+	d.redisServerStartCmd = cmd
 
-	if err := d.waitForRedisReady(ctx); err != nil {
+	readyCtx, cancel := context.WithTimeout(ctx, REDIS_START_TIMEOUT)
+	defer cancel()
+
+	d.redisClient = d.newRedisClient(password)
+
+	err := pollUntil(readyCtx, 100*time.Millisecond, func(ctx context.Context) bool {
+		return d.redisClient.Ping(ctx).Err() == nil
+	})
+
+	if err != nil {
 		cmd.Process.Kill()
 		cmd.Wait()
-		d.redis = nil
+		d.redisClient.Close()
+		d.redisServerStartCmd = nil
+		return fmt.Errorf("Redis failed to start within %s, err: %w", REDIS_START_TIMEOUT, err)
+	}
+
+	return nil
+}
+
+// Migrate this Redis DB to a new address
+func (d *DBPod) MigrateDatabase(ctx context.Context, replicaAddress string) error {
+	if d.redisServerStartCmd == nil {
+		return ErrNoDatabaseRunningOnPod
+	}
+
+	host, port, err := net.SplitHostPort(replicaAddress)
+	if err != nil {
 		return err
+	}
+
+	// Send the FAILOVER request
+	reply, err := d.redisClient.Do(ctx, "FAILOVER", "TO", host, port, "TIMEOUT", strconv.Itoa(DEFAULT_MIGRATION_TIMEOUT)).Text()
+	if reply != "OK" || err != nil {
+		return err
+	}
+
+	// Wait for the FAILOVER to be completed
+	var info map[string]string
+	err = pollUntil(ctx, 50*time.Millisecond, func(ctx context.Context) bool {
+		var err error
+		info, err = d.replicationInfo(ctx)
+		return err == nil && info["master_failover_state"] == "no-failover"
+	})
+	if err != nil {
+		return fmt.Errorf("failover not complete: %w", err)
+	}
+	if info["role"] != "slave" { // Should be switched to slave (the replica should now be primary)
+		return errors.New("failover aborted: still primary") // timed out or replica dropped
 	}
 	return nil
 }
 
-func (d *DBPod) waitForRedisReady(ctx context.Context) error {
-	ticker := time.NewTicker(100 * time.Millisecond)
+func (d *DBPod) replicationInfo(ctx context.Context) (map[string]string, error) {
+	raw, err := d.redisClient.Info(ctx, "replication").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	info := make(map[string]string)
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line) // strips the \r
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if key, value, ok := strings.Cut(line, ":"); ok {
+			info[key] = value
+		}
+	}
+
+	return info, nil
+}
+
+func pollUntil(ctx context.Context, interval time.Duration, check func(ctx context.Context) bool) error {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		out, err := exec.CommandContext(ctx, "redis-cli", "-p", strconv.Itoa(d.redisPort), "-a", d.databaseID, "--no-auth-warning", "PING").Output()
-		if err == nil && strings.TrimSpace(string(out)) == "PONG" {
+		if check(ctx) {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("redis not ready: %w", ctx.Err())
+			return ctx.Err()
 		case <-ticker.C:
 		}
 	}
 }
 
 func (d *DBPod) saveSnapshot(ctx context.Context) error {
-	if err := exec.CommandContext(ctx, "redis-cli", "-p", strconv.Itoa(d.redisPort), "-a", d.databaseID, "--no-auth-warning", "SAVE").Run(); err != nil {
+	if err := d.redisClient.Save(ctx).Err(); err != nil {
 		return err
 	}
 
@@ -105,7 +224,7 @@ func (d *DBPod) saveSnapshot(ctx context.Context) error {
 		return err
 	}
 	defer close()
-	res, err := controllerClient.GetSnapshotUploadURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.databaseID})
+	res, err := controllerClient.GetSnapshotPutURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.DatabaseID})
 	if err != nil {
 		return err
 	}
@@ -158,7 +277,7 @@ func (d *DBPod) loadSnapshot(ctx context.Context, getURL string) error {
 }
 
 func (d *DBPod) Stop(ctx context.Context, save bool) error {
-	if d.redis == nil {
+	if d.redisServerStartCmd == nil { // If redisCmd is nil, then nothing is currently running
 		return ErrNoDatabaseRunningOnPod
 	}
 	if save {
@@ -167,11 +286,32 @@ func (d *DBPod) Stop(ctx context.Context, save bool) error {
 		}
 	}
 
-	if err := exec.CommandContext(ctx, "redis-cli", "-p", strconv.Itoa(d.redisPort), "-a", d.databaseID, "--no-auth-warning", "SHUTDOWN", "NOSAVE").Run(); err != nil {
+	// By default, a client tries to reconnect to the server, even after it's shutdown (?)
+	// So create a new client that doesn't try to reconnect.
+	shutdownClient := d.newRedisClient(d.DatabaseID)
+	shutdownClient.Options().MaxRetries = 0
+
+	if err := shutdownClient.ShutdownNoSave(ctx).Err(); err != nil {
 		return err
 	}
 
-	err := d.redis.Wait()
-	d.redis = nil
+	err := d.redisServerStartCmd.Wait()
+	d.redisServerStartCmd = nil
+	d.redisClient.Close()
+	shutdownClient.Close()
+	d.redisClient = nil
+	return err
+}
+
+func (d *DBPod) HandleTermination(ctx context.Context, save bool) error {
+	if d.redisServerStartCmd == nil { // No running Redis (e.g. Paused/Deleted/Unclaimed) so can do nothing
+		return nil
+	}
+	client, closeConn, err := d.controllerClientFactory.NewConnectedClient()
+	if err != nil { // Backup: controller is unresponsive, so just save a snapshot
+		return d.saveSnapshot(ctx)
+	}
+	defer closeConn()
+	_, err = client.RequestMigration(ctx, &controller_pb.RequestMigrationRequest{DatabaseId: d.DatabaseID})
 	return err
 }

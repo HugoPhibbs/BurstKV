@@ -103,11 +103,19 @@ func (s *SnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string)
 }
 
 func (s *SnapshotStorage) PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
-	u, err := s.minioClient.PresignedPutObject(ctx, s.bucketName, s.snapshotObjectName(databaseID), expiry)
+	putURL, err := s.minioClient.PresignedPutObject(ctx, s.bucketName, s.snapshotObjectName(databaseID), expiry)
 	if err != nil {
 		return "", err
 	}
-	return u.String(), nil
+	return putURL.String(), nil
+}
+
+func (s *SnapshotStorage) PresignedGetURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
+	getURL, err := s.minioClient.PresignedGetObject(ctx, s.bucketName, s.snapshotObjectName(databaseID), expiry, nil)
+	if err != nil {
+		return "", err
+	}
+	return getURL.String(), nil
 }
 
 func (s *SnapshotStorage) NumSnapshots(ctx context.Context) (int, error) {
@@ -128,4 +136,12 @@ func (s *SnapshotStorage) SnapshotLastUpdateTime(ctx context.Context, databaseID
 		return 0, err
 	}
 	return info.LastModified.Unix(), nil
+}
+
+func (s *SnapshotStorage) MinioClient() *minio.Client {
+	return s.minioClient
+}
+
+func (s *SnapshotStorage) BucketName() string {
+	return s.bucketName
 }

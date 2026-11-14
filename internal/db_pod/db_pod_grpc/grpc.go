@@ -29,9 +29,29 @@ func (s *PodGRPCServer) ListenAndServe(addr string) error {
 	return grpcServer.Serve(lis)
 }
 
-func (s *PodGRPCServer) Assign(ctx context.Context, req *pb.AssignDatabaseRequest) (*pb.Empty, error) {
-	err := s.dbPod.Assign(ctx, req.GetDatabaseId(), req.GetGetUrl(), req.GetCreate())
-	if err != nil {
+func (s *PodGRPCServer) CreateDatabase(ctx context.Context, req *pb.CreateDatabaseRequest) (*pb.Empty, error) {
+	if err := s.dbPod.CreateDatabase(ctx, req.GetDatabaseId()); err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
+func (s *PodGRPCServer) ResumeDatabase(ctx context.Context, req *pb.ResumeDatabaseRequest) (*pb.Empty, error) {
+	if err := s.dbPod.ResumeDatabase(ctx, req.GetDatabaseId(), req.GetGetUrl()); err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
+func (s *PodGRPCServer) ReplicateDatabase(ctx context.Context, req *pb.ReplicateDatabaseRequest) (*pb.Empty, error) {
+	if err := s.dbPod.ReplicateDatabase(ctx, req.GetDatabaseId(), req.GetPrimaryAddress()); err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
+func (s *PodGRPCServer) MigrateDatabase(ctx context.Context, req *pb.MigrateDatabaseRequest) (*pb.Empty, error) {
+	if err := s.dbPod.MigrateDatabase(ctx, req.GetReplicaAddress()); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil

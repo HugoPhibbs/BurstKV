@@ -5,7 +5,10 @@ package db_pod;
 option go_package = "burstkv/internal/db_pod/db_pod_pb";
 
 service DBPod {
-  rpc Assign(AssignDatabaseRequest) returns (Empty);
+  rpc ResumeDatabase(ResumeDatabaseRequest) returns (Empty);
+  rpc ReplicateDatabase(ReplicateDatabaseRequest) returns (Empty);
+  rpc MigrateDatabase(MigrateDatabaseRequest) returns (Empty);
+  rpc CreateDatabase(CreateDatabaseRequest) returns (Empty);
   rpc Stop(StopRequest) returns (Empty);
 }
 
@@ -15,8 +18,20 @@ message StopRequest {
   bool save = 1;
 }
 
-message AssignDatabaseRequest {
+message ResumeDatabaseRequest {
   string database_id = 1;
   string get_url = 2;
-  bool create = 3;
+}
+
+message CreateDatabaseRequest {
+  string database_id = 1;
+}
+
+message MigrateDatabaseRequest {
+  string replicaAddress = 1;
+}
+
+message ReplicateDatabaseRequest {
+  string database_id = 1;
+  string primaryAddress = 2;
 }

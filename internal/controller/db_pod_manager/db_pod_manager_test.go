@@ -26,13 +26,13 @@ func warmPod(name, ip string) *corev1.Pod {
 }
 
 func podExists(t *testing.T, k8s kubernetes.Interface, podName string) bool {
-    t.Helper()
-    _, err := k8s.CoreV1().Pods("test").Get(t.Context(), podName, metav1.GetOptions{})
-    if apierrors.IsNotFound(err) {
-        return false
-    }
-    require.NoError(t, err)
-    return true
+	t.Helper()
+	_, err := k8s.CoreV1().Pods("test").Get(t.Context(), podName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false
+	}
+	require.NoError(t, err)
+	return true
 }
 
 func TestPodManager_TestClaimWarmPod(t *testing.T) {
@@ -42,7 +42,7 @@ func TestPodManager_TestClaimWarmPod(t *testing.T) {
 
 	claimed, err := pm.ClaimWarmPod(ctx)
 	require.NoError(t, err)
-	require.Equal(t, "10.0.0.1", claimed.PodIP)
+	require.Equal(t, "10.0.0.1", claimed.IP())
 
 	got, err := k8s.CoreV1().Pods("test").Get(ctx, "pod-1", metav1.GetOptions{})
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestPodManager_TestDeletingPods(t *testing.T) {
 	pm := newTestPodManager(k8s, "test")
 
 	require.True(t, podExists(t, k8s, "pod-2"))
-	require.NoError(t,  pm.DeletePod(ctx, "pod-2"), "Deleting pod-2 shouldn't return an error")
+	require.NoError(t, pm.DeletePod(ctx, "pod-2"), "Deleting pod-2 shouldn't return an error")
 	require.False(t, podExists(t, k8s, "pod-2"))
 
 	require.ErrorIs(t, pm.DeletePod(ctx, "pod-2"), core.ErrPodNotFound)

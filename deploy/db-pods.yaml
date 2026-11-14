@@ -13,6 +13,7 @@ spec:
       containers:
       - name: redis
         image: burstkv-dbpod:latest
+        imagePullPolicy: Never # Local image build
         env:
           - name: REDIS_PORT
             value: "6379"

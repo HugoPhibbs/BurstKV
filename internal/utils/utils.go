@@ -9,19 +9,28 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Pings rdb until it replies or 10s pass.
+// Pings rdb until it replies or 10s pass. Timeout in seconds
 func WaitForRedis(ctx context.Context, rdb *redis.Client, timeout int) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	check := func(ctx context.Context) error {return rdb.Ping(ctx).Err()}
+	return WaitUntilReady(ctx, check, time.Duration(timeout) * time.Second, 100 * time.Millisecond)
+}
+
+func WaitUntilReady(ctx context.Context, check func(ctx context.Context) error, timeout time.Duration, interval time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for {
-		if err := rdb.Ping(ctx).Err(); err == nil {
+		err := check(ctx)
+		if err == nil {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("redis not ready: %w", ctx.Err())
-		case <-time.After(100 * time.Millisecond):
+			return fmt.Errorf("not ready after %s: %w", timeout, err)
+		case <-ticker.C:
 		}
 	}
 }

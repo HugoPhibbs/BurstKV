@@ -14,6 +14,7 @@ spec:
       containers:
       - name: controller
         image: burstkv-controller 
+        imagePullPolicy: Never # Assume images are built locally
         ports:
         - { name: grpc, containerPort: 6381 }
 
@@ -26,6 +27,18 @@ spec:
   selector: { burstkv/role: controller }
   ports:
   - { name: grpc, port: 6381, targetPort: grpc }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: burstkv-public
+spec:
+  type: LoadBalancer
+  selector: {burstkv/role: controller}
+  ports:
+  - { name: http,  port: 6378, targetPort: http }
+  - { name: redis, port: 6379, targetPort: redis }
 
 
 ---

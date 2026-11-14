@@ -1,12 +1,13 @@
 package redis_proxy
 
 import (
+	"burstkv/internal/utils"
 	"context"
 	"fmt"
 	"net"
+	"os/exec"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -42,65 +43,126 @@ func (r *fakeRouter) activityFor(id string) int {
 	return n
 }
 
-func newDatabase(t *testing.T, databaseID string) *miniredis.Miniredis {
-	s := miniredis.RunT(t)
-	s.RequireAuth(databaseID)
-	return s
+func localAddr(port string) string {
+	return net.JoinHostPort("localhost", port)
 }
 
-func newClient(t *testing.T, p *RedisProxy, password string) *redis.Client {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "proxy", // unused, Dialer takes over
-		Password: password,
-		Dialer: func(context.Context, string, string) (net.Conn, error) {
-			client, server := net.Pipe()
-			go p.handle(t.Context(), server)
-			return client, nil
-		},
-	})
+func startNewRedisServer(t *testing.T, port string, password string) {
+	err := exec.CommandContext(t.Context(), "redis-server", "--port", port, "--requirepass", password).Start()
+	require.NoError(t, err)
+}
+
+func startProxy(t *testing.T, port string, router Router) string {
+	addr := localAddr(port)
+	go NewRedisProxy(addr, router).ListenAndServe(t.Context())
+	return addr
+}
+
+func newClient(t *testing.T, addr, password string) *redis.Client {
+	rdb := redis.NewClient(&redis.Options{Addr: addr, Password: password})
 	t.Cleanup(func() { rdb.Close() })
 	return rdb
 }
 
-func TestRedisProxy_SetAndGet(t *testing.T) {
-	dbA := newDatabase(t, "db-a")
-	router := newFakeRouter(map[string]string{"db-a": dbA.Addr()})
-	rdb := newClient(t, NewRedisProxy("", router), "db-a")
+func TestRedisProxy_TestSetAndGet(t *testing.T) {
+	ctx := t.Context()
+	startNewRedisServer(t, "6840", "db-a")
+	router := newFakeRouter(map[string]string{"db-a": localAddr("6840")})
+	proxyAddr := startProxy(t, "6839", router)
 
-	require.NoError(t, rdb.Set(t.Context(), "k", "v", 0).Err())
-	val, err := rdb.Get(t.Context(), "k").Result()
+	rdb := newClient(t, proxyAddr, "db-a")
+	require.NoError(t, utils.WaitForRedis(ctx, rdb, 5))
+
+	require.NoError(t, rdb.Set(ctx, "k", "v", 0).Err())
+	val, err := rdb.Get(ctx, "k").Result()
 	require.NoError(t, err)
 	assert.Equal(t, "v", val)
 
-	dbA.CheckGet(t, "k", "v") // the write really landed upstream
+	// Look directly into the DB to check the write landed
+	direct, err := newClient(t, localAddr("6840"), "db-a").Get(ctx, "k").Result()
+	require.NoError(t, err)
+	assert.Equal(t, "v", direct)
+
 	assert.Positive(t, router.activityFor("db-a"))
 }
 
-func TestRedisProxy_RoutesByDatabaseID(t *testing.T) {
-	dbA, dbB := newDatabase(t, "db-a"), newDatabase(t, "db-b")
-	p := NewRedisProxy("", newFakeRouter(map[string]string{"db-a": dbA.Addr(), "db-b": dbB.Addr()}))
+func TestRedisProxy_TestRoutesByDatabaseID(t *testing.T) {
+	ctx := t.Context()
+	startNewRedisServer(t, "6842", "db-a")
+	startNewRedisServer(t, "6843", "db-b")
+	proxyAddr := startProxy(t, "6841", newFakeRouter(map[string]string{
+		"db-a": localAddr("6842"),
+		"db-b": localAddr("6843"),
+	}))
 
-	require.NoError(t, newClient(t, p, "db-a").Set(t.Context(),
-		"k", "from-a", 0).Err())
-	require.NoError(t, newClient(t, p, "db-b").Set(t.Context(),
-		"k", "from-b", 0).Err())
+	clientA, clientB := newClient(t, proxyAddr, "db-a"), newClient(t, proxyAddr, "db-b")
+	require.NoError(t, utils.WaitForRedis(ctx, clientA, 5))
+	require.NoError(t, utils.WaitForRedis(ctx, clientB, 5))
 
-	dbA.CheckGet(t, "k", "from-a")
-	dbB.CheckGet(t, "k", "from-b")
+	require.NoError(t, clientA.Set(ctx, "k", "from-a", 0).Err())
+	require.NoError(t, clientB.Set(ctx, "k", "from-b", 0).Err())
+
+	clientADirect, err := newClient(t, localAddr("6842"), "db-a").Get(ctx, "k").Result()
+	require.NoError(t, err)
+	assert.Equal(t, "from-a", clientADirect)
+
+	clientBDirect, err := newClient(t, localAddr("6843"), "db-b").Get(ctx, "k").Result()
+	require.NoError(t, err)
+	assert.Equal(t, "from-b", clientBDirect)
 }
 
-func TestRedisProxy_NoAuth(t *testing.T) {
-	p := NewRedisProxy("", newFakeRouter(nil))
-	assert.Error(t, newClient(t, p, "").Ping(t.Context()).Err())
+func TestRedisProxy_TestNoAuth(t *testing.T) {
+	ctx := t.Context()
+	startNewRedisServer(t, "6845", "db-a")
+	proxyAddr := startProxy(t, "6844", newFakeRouter(map[string]string{"db-a": localAddr("6845")}))
+	require.NoError(t, utils.WaitForRedis(ctx, newClient(t, proxyAddr, "db-a"), 5))
+
+	require.Error(t, newClient(t, proxyAddr, "").Ping(ctx).Err()) // No password
 }
 
-func TestRedisProxy_UnknownDatabase(t *testing.T) {
-	p := NewRedisProxy("", newFakeRouter(nil))
-	assert.Error(t, newClient(t, p, "nope").Ping(t.Context()).Err())
+func TestRedisProxy_TestUnknownServer(t *testing.T) {
+	ctx := t.Context()
+	startNewRedisServer(t, "6847", "db-a")
+	proxyAddr := startProxy(t, "6846", newFakeRouter(map[string]string{"db-a": localAddr("6847")}))
+	require.NoError(t, utils.WaitForRedis(ctx, newClient(t, proxyAddr, "db-a"), 5))
+
+	assert.Error(t, newClient(t, proxyAddr, "unknown").Ping(ctx).Err())
 }
 
-func TestRedisProxy_UpstreamUnreachable(t *testing.T) {
-	// A made-up address that nothing listens on
-	p := NewRedisProxy("", newFakeRouter(map[string]string{"db-a": "127.0.0.1:1"}))
-	assert.Error(t, newClient(t, p, "db-a").Ping(t.Context()).Err())
+func TestRedisProxy_TestUnreachableServer(t *testing.T) {
+	ctx := t.Context()
+	startNewRedisServer(t, "6849", "db-a")
+	proxyAddr := startProxy(t, "6848", newFakeRouter(map[string]string{
+		"db-a": localAddr("6849"),
+		"db-b": "127.0.0.1:1", // Nothing listening here
+	}))
+
+	require.NoError(t, utils.WaitForRedis(ctx, newClient(t, proxyAddr, "db-a"), 5))
+	assert.Error(t, newClient(t, proxyAddr, "db-b").Ping(ctx).Err())
+}
+
+func TestRedisProxy_TestUpdatingActivity(t *testing.T) {
+	ctx := t.Context()
+
+	dbID := "db-a"
+	startNewRedisServer(t, "6850", dbID)
+	router := newFakeRouter(map[string]string{dbID: localAddr("6850")})
+	proxyAddr := startProxy(t, "6851", router)
+
+	rdb := newClient(t, proxyAddr, dbID)
+	require.NoError(t, utils.WaitForRedis(ctx, rdb, 5))
+
+	pings, _ := router.activity.Load(dbID)
+
+	require.NoError(t, rdb.Set(ctx, "k", "v", 0).Err())
+
+	a, _ := router.activity.Load(dbID)
+	require.Equal(t, a, pings + 1)
+
+	val, err := rdb.Get(ctx, "k").Result()
+	require.NoError(t, err)
+	assert.Equal(t, "v", val)
+	
+	a, _ = router.activity.Load(dbID)
+	require.Equal(t, a, pings + 2)
 }
