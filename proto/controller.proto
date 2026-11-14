@@ -7,7 +7,7 @@ option go_package = "burstkv/internal/controller/controller_pb";
 
 import "google/protobuf/empty.proto";
 service Controller {
-  rpc GetSnapshotUploadURL(GetSnapshotUploadURLRequest) returns (GetSnapshotUploadURLResponse);
+  rpc GetSnapshotPutURL(GetSnapshotUploadURLRequest) returns (GetSnapshotUploadURLResponse);
   rpc RequestMigration(RequestMigrationRequest) returns (google.protobuf.Empty);
 }
 message GetSnapshotUploadURLRequest  { string database_id = 1; }

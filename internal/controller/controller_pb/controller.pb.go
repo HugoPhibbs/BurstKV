@@ -167,10 +167,10 @@ const file_proto_controller_proto_rawDesc = "" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
 	"databaseId\"0\n" +
 	"\x1cGetSnapshotUploadURLResponse\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url2\xc8\x01\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url2\xc5\x01\n" +
 	"\n" +
-	"Controller\x12i\n" +
-	"\x14GetSnapshotUploadURL\x12'.controller.GetSnapshotUploadURLRequest\x1a(.controller.GetSnapshotUploadURLResponse\x12O\n" +
+	"Controller\x12f\n" +
+	"\x11GetSnapshotPutURL\x12'.controller.GetSnapshotUploadURLRequest\x1a(.controller.GetSnapshotUploadURLResponse\x12O\n" +
 	"\x10RequestMigration\x12#.controller.RequestMigrationRequest\x1a\x16.google.protobuf.EmptyB+Z)burstkv/internal/controller/controller_pbb\x06proto3"
 
 var (
@@ -193,9 +193,9 @@ var file_proto_controller_proto_goTypes = []any{
 	(*emptypb.Empty)(nil),                // 3: google.protobuf.Empty
 }
 var file_proto_controller_proto_depIdxs = []int32{
-	0, // 0: controller.Controller.GetSnapshotUploadURL:input_type -> controller.GetSnapshotUploadURLRequest
+	0, // 0: controller.Controller.GetSnapshotPutURL:input_type -> controller.GetSnapshotUploadURLRequest
 	1, // 1: controller.Controller.RequestMigration:input_type -> controller.RequestMigrationRequest
-	2, // 2: controller.Controller.GetSnapshotUploadURL:output_type -> controller.GetSnapshotUploadURLResponse
+	2, // 2: controller.Controller.GetSnapshotPutURL:output_type -> controller.GetSnapshotUploadURLResponse
 	3, // 3: controller.Controller.RequestMigration:output_type -> google.protobuf.Empty
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type

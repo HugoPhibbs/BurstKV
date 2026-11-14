@@ -20,15 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Controller_GetSnapshotUploadURL_FullMethodName = "/controller.Controller/GetSnapshotUploadURL"
-	Controller_RequestMigration_FullMethodName     = "/controller.Controller/RequestMigration"
+	Controller_GetSnapshotPutURL_FullMethodName = "/controller.Controller/GetSnapshotPutURL"
+	Controller_RequestMigration_FullMethodName  = "/controller.Controller/RequestMigration"
 )
 
 // ControllerClient is the client API for Controller service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ControllerClient interface {
-	GetSnapshotUploadURL(ctx context.Context, in *GetSnapshotUploadURLRequest, opts ...grpc.CallOption) (*GetSnapshotUploadURLResponse, error)
+	GetSnapshotPutURL(ctx context.Context, in *GetSnapshotUploadURLRequest, opts ...grpc.CallOption) (*GetSnapshotUploadURLResponse, error)
 	RequestMigration(ctx context.Context, in *RequestMigrationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -40,10 +40,10 @@ func NewControllerClient(cc grpc.ClientConnInterface) ControllerClient {
 	return &controllerClient{cc}
 }
 
-func (c *controllerClient) GetSnapshotUploadURL(ctx context.Context, in *GetSnapshotUploadURLRequest, opts ...grpc.CallOption) (*GetSnapshotUploadURLResponse, error) {
+func (c *controllerClient) GetSnapshotPutURL(ctx context.Context, in *GetSnapshotUploadURLRequest, opts ...grpc.CallOption) (*GetSnapshotUploadURLResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSnapshotUploadURLResponse)
-	err := c.cc.Invoke(ctx, Controller_GetSnapshotUploadURL_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Controller_GetSnapshotPutURL_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (c *controllerClient) RequestMigration(ctx context.Context, in *RequestMigr
 // All implementations must embed UnimplementedControllerServer
 // for forward compatibility.
 type ControllerServer interface {
-	GetSnapshotUploadURL(context.Context, *GetSnapshotUploadURLRequest) (*GetSnapshotUploadURLResponse, error)
+	GetSnapshotPutURL(context.Context, *GetSnapshotUploadURLRequest) (*GetSnapshotUploadURLResponse, error)
 	RequestMigration(context.Context, *RequestMigrationRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedControllerServer()
 }
@@ -76,8 +76,8 @@ type ControllerServer interface {
 // pointer dereference when methods are called.
 type UnimplementedControllerServer struct{}
 
-func (UnimplementedControllerServer) GetSnapshotUploadURL(context.Context, *GetSnapshotUploadURLRequest) (*GetSnapshotUploadURLResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetSnapshotUploadURL not implemented")
+func (UnimplementedControllerServer) GetSnapshotPutURL(context.Context, *GetSnapshotUploadURLRequest) (*GetSnapshotUploadURLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSnapshotPutURL not implemented")
 }
 func (UnimplementedControllerServer) RequestMigration(context.Context, *RequestMigrationRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestMigration not implemented")
@@ -103,20 +103,20 @@ func RegisterControllerServer(s grpc.ServiceRegistrar, srv ControllerServer) {
 	s.RegisterService(&Controller_ServiceDesc, srv)
 }
 
-func _Controller_GetSnapshotUploadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Controller_GetSnapshotPutURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSnapshotUploadURLRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControllerServer).GetSnapshotUploadURL(ctx, in)
+		return srv.(ControllerServer).GetSnapshotPutURL(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Controller_GetSnapshotUploadURL_FullMethodName,
+		FullMethod: Controller_GetSnapshotPutURL_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControllerServer).GetSnapshotUploadURL(ctx, req.(*GetSnapshotUploadURLRequest))
+		return srv.(ControllerServer).GetSnapshotPutURL(ctx, req.(*GetSnapshotUploadURLRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -147,8 +147,8 @@ var Controller_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ControllerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetSnapshotUploadURL",
-			Handler:    _Controller_GetSnapshotUploadURL_Handler,
+			MethodName: "GetSnapshotPutURL",
+			Handler:    _Controller_GetSnapshotPutURL_Handler,
 		},
 		{
 			MethodName: "RequestMigration",
