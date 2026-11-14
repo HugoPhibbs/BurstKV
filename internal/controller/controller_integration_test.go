@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -148,7 +149,7 @@ func startSnapshotServer(t *testing.T, port int, ak string, sk string) error {
 	}
 
 	t.Cleanup(func() {
-		exec.Command("docker", "rm", "-f", "snapshot_server_dev").Run()
+		exec.Command("docker", "rm", "-f", "snapshot-server-test").Run()
 	})
 	return nil
 }
@@ -193,12 +194,15 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	gatewayIP, err := dockerGatewayIP()
 	assert.NoError(t, err)
 
-	snapshotAddress := fmt.Sprintf("%s:%d", gatewayIP, snapshortPort)
+	snapshotAddress := net.JoinHostPort(gatewayIP, strconv.Itoa(snapshortPort))
 	snapshotStorage := snapshot_storage.NewSnapshotStorage(snapshotAddress, "snapshots", creds, false)
 
 	err = utils.WaitUntilReady(ctx, func(ctx context.Context) error {
-		_, err := snapshotStorage.MinioClient().ListBuckets(ctx)
-		return err
+		conn, err := net.DialTimeout("tcp", snapshotAddress, time.Second)
+		if err != nil {
+			return err
+		}
+		return conn.Close()
 	}, 10*time.Second, 100*time.Millisecond)
 	require.NoError(t, err, "snapshot server never became ready")
 
