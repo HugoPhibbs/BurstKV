@@ -140,11 +140,12 @@ func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error
 
 func startSnapshotServer(t *testing.T, port int, ak string, sk string) error {
 	name := "snapshot-server-test"
-	cmd := exec.Command("python", "./scripts/start_dev_snapshot_server.py", "-n", name, "-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
+	cmd := exec.Command("python", "./scripts/start_dev_snapshot_server.py", "-n", name, "-nv", "-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
 	cmd.Dir = "../.."
 	out, err := cmd.CombinedOutput() // waits for the script, captures stdout+stderr
+	fmt.Printf("output from starting snapshot server \n%s", out)
 	if err != nil {
-		return fmt.Errorf("starting snapshot server: \n%s \n%w", out, err)
+		return fmt.Errorf("starting snapshot server: \n%w", err)
 	}
 
 	t.Cleanup(func() {
