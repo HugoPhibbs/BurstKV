@@ -4,6 +4,7 @@ import subprocess
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the development snapshot server.")
+    parser.add_argument("--name", "-n", help="Name of the container to be run")
     parser.add_argument("--detached", "-d", action="store_true", help="Run the snapshot server in detached mode")
     parser.add_argument("--api-port", "-p", type=int, default=9000, help="Host port for the snapshot server (default: 9000)")
     parser.add_argument("--console-port", type=int, default=9001, help="Host port for the snapshot server console (default: 9001)")
@@ -23,7 +24,7 @@ if __name__ == "__main__":
             "docker", "run",
             *(["-d"] if args.detached else []),
             "--rm",
-            "--name", "snapshot_server_dev",
+            "--name", args.name,
             "-p", f"{args.api_port}:9000",
             "-p", f"{args.console_port}:9001",
             "-v", f"{snapshot_server_path}/data:/data",

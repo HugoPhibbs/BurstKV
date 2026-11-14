@@ -138,19 +138,18 @@ func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error
 }
 
 func startSnapshotServer(t *testing.T, port int, ak string, sk string) error {
-	ctx, cancel := context.WithCancel(t.Context())
-
-	log.Default().Printf("Snapshot server listening on localhost:%d", port)
-	cmd := exec.CommandContext(ctx, "python", "./scripts/start_dev_snapshot_server.py", "-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
+	cmd := exec.Command("python", "./scripts/start_dev_snapshot_server.py",
+		"-n", "snapshot-server-test",
+		"-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
 	cmd.Dir = "../.."
 
-	t.Cleanup(cancel)
-
-	err := cmd.Start()
-	if err != nil {
-		return err
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("starting snapshot server: %w\n%s", err, out)
 	}
 
+	t.Cleanup(func() {
+		exec.Command("docker", "rm", "-f", "snapshot_server_dev").Run()
+	})
 	return nil
 }
 
@@ -188,13 +187,21 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	sk := "sk-dev"
 	snapshortPort := 9000
 	require.NoError(t, startSnapshotServer(t, snapshortPort, ak, sk))
-
 	creds := credentials.NewStaticV4(ak, sk, "")
 	// Get the IP of the Docker Gateway (works from within a container and locally)
-	
+
 	gatewayIP, err := dockerGatewayIP()
 	assert.NoError(t, err)
-	snapshotStorage := snapshot_storage.NewSnapshotStorage(fmt.Sprintf("%s:%d", gatewayIP, snapshortPort), "snapshots", creds, false)
+
+	snapshotAddress := fmt.Sprintf("%s:%d", gatewayIP, snapshortPort)
+	snapshotStorage := snapshot_storage.NewSnapshotStorage(snapshotAddress, "snapshots", creds, false)
+
+	err = utils.WaitUntilReady(ctx, func(ctx context.Context) error {
+		_, err := snapshotStorage.MinioClient().ListBuckets(ctx)
+		return err
+	}, 30*time.Second, 100*time.Millisecond)
+	require.NoError(t, err, "snapshot server never became ready")
+
 	err = snapshotStorage.MinioClient().MakeBucket(ctx, snapshotStorage.BucketName(), minio.MakeBucketOptions{})
 	require.NoError(t, err)
 
@@ -241,7 +248,7 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	assert.NotEqual(t, resumedDBAddress, migatedDBAddress)
 	migratedDB := redis.NewClient(&redis.Options{Addr: migatedDBAddress, Password: dbID})
 	assert.NoError(t, migratedDB.Ping(ctx).Err())
-	assert.Error(t, resumedRDB.Ping(ctx).Err()) // Check that the old primary is shutdown
+	assert.Error(t, resumedRDB.Ping(ctx).Err())       // Check that the old primary is shutdown
 	val, err = migratedDB.Get(ctx, "test-k").Result() // Check that the data is migrated
 	assert.NoError(t, err)
 	assert.Equal(t, "test-v", val)
@@ -251,7 +258,7 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	deletedAddress, err := c.RouteDatabase(ctx, dbID)
 	assert.Equal(t, "", deletedAddress)
 	assert.Error(t, err, core.ErrDatabaseNotFound)
-	assert.Error(t, migratedDB.Ping(ctx).Err())                             // Check the deleted DB is shutdown
+	assert.Error(t, migratedDB.Ping(ctx).Err())                      // Check the deleted DB is shutdown
 	snapshotExists, err := snapshotStorage.SnapshotExists(ctx, dbID) // Check the snapshot was deletedd
 	assert.NoError(t, err)
 	assert.False(t, snapshotExists)
