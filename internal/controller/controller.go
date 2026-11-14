@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/controller/database"
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/core"
 	"burstkv/internal/db_pod/db_pod_pb"
@@ -74,7 +74,7 @@ func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatu
 	foundDatabase.Lock()
 	defer foundDatabase.Unlock()
 
-	if foundDatabase.IsDeleted {
+	if foundDatabase.IsDeleted() {
 		return database.NotFound, nil
 	}
 
@@ -105,7 +105,7 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 	foundDB.Lock()
 	defer foundDB.Unlock()
 
-	if foundDB.IsDeleted {
+	if foundDB.IsDeleted() {
 		return core.ErrDatabaseNotFound
 	}
 
@@ -119,7 +119,7 @@ func (c *Controller) DeleteDatabase(ctx context.Context, databaseID string) erro
 		log.Printf("Error occured when deleting a snapshot %v", err)
 	}
 
-	foundDB.IsDeleted = true
+	foundDB.SetIsDeleted(true)
 	c.databases.Delete(databaseID)
 
 	return nil
@@ -146,7 +146,7 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error
 	foundDB.Lock()
 	defer foundDB.Unlock()
 
-	if foundDB.IsDeleted {
+	if foundDB.IsDeleted() {
 		return core.ErrDatabaseNotFound
 	}
 
@@ -157,7 +157,7 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error
 }
 
 func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
-	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod.PodIP)
+	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod().PodIP)
 	if err != nil {
 		return err
 	}
@@ -169,11 +169,11 @@ func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Databas
 		return err
 	}
 
-	if err := c.podManager.DeletePod(ctx, foundDB.Pod.PodName); err != nil {
+	if err := c.podManager.DeletePod(ctx, foundDB.Pod().PodName); err != nil {
 		return err
 
 	}
-	foundDB.Pod = nil
+	foundDB.SetPod(nil)
 	return nil
 }
 
@@ -197,7 +197,7 @@ func (c *Controller) ResumeDatabase(ctx context.Context, databaseID string) erro
 }
 
 func (c *Controller) resumeDatabaseHelper(ctx context.Context, DB *database.Database) error {
-	if DB.IsDeleted {
+	if DB.IsDeleted() {
 		return core.ErrDatabaseNotFound
 	}
 
@@ -218,7 +218,7 @@ func (c *Controller) resumeDatabaseHelper(ctx context.Context, DB *database.Data
 		return err
 	}
 
-	DB.Pod = claimedPod
+	DB.SetPod(claimedPod)
 	return nil
 }
 
@@ -239,7 +239,7 @@ func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	newDB.Pod = claimedPod
+	newDB.SetPod(claimedPod)
 	c.databases.Store(newDatabaseID, newDB)
 	return newDatabaseID, nil
 }
@@ -265,7 +265,7 @@ func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, add
 	database.Lock()
 	defer database.Unlock()
 
-	if database.IsDeleted {
+	if database.IsDeleted() {
 		return core.ErrDatabaseNotFound
 	}
 
@@ -288,19 +288,19 @@ func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, add
 	}
 
 	// Migrate
-	primaryClient, closePrimary, err := c.grpcClientFactory.NewConnectedClient(database.Pod.PodIP)
+	primaryClient, closePrimary, err := c.grpcClientFactory.NewConnectedClient(database.Pod().PodIP)
 	if err != nil {
 		return err
 	}
 	defer closePrimary()
 
-	newAddress := net.JoinHostPort(database.Pod.PodIP, strconv.Itoa(c.proxyPort))
+	newAddress := net.JoinHostPort(database.Pod().PodIP, strconv.Itoa(c.proxyPort))
 	_, err = primaryClient.MigrateDatabase(ctx, &db_pod_pb.MigrateDatabaseRequest{NewAddress: newAddress})
 	if err != nil {
 		return err
 	}
 
-	database.Pod = claimedPod
+	database.SetPod(claimedPod)
 	return nil
 }
 
@@ -336,7 +336,7 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 	foundDB.Lock()
 	defer foundDB.Unlock()
 
-	if foundDB.IsDeleted {
+	if foundDB.IsDeleted() {
 		return "", core.ErrDatabaseNotFound
 	}
 
@@ -346,27 +346,25 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 		}
 	}
 
-	return fmt.Sprintf("%s:%d", foundDB.Pod.PodIP, c.proxyPort), nil
+	return fmt.Sprintf("%s:%d", foundDB.Pod().PodIP, c.proxyPort), nil
 }
 
 // Returns a short-lived presigned URL for uploading the database's snapshot.
 // Only the pod currently assigned to the database (identified by callerIP) may request one.
-func (c *Controller) SnapshotUploadURL(ctx context.Context, databaseID string, callerIP string) (string, error) {
+func (c *Controller) SnapshotPutURL(ctx context.Context, databaseID string, callerIP string) (string, error) {
 	db, exists := c.databases.Load(databaseID)
-	if !exists {
+	if !exists || db.IsDeleted() {
 		return "", core.ErrDatabaseNotFound
 	}
 
-	db.Lock()
-	defer db.Unlock()
-
-	if db.IsDeleted {
-		return "", core.ErrDatabaseNotFound
+	if !db.IsRunning() {
+		return "", core.ErrDatabasePaused
 	}
 
-	if !db.IsRunning() || db.Pod.PodIP != callerIP {
+	if db.Pod().PodIP != callerIP {
 		return "", ErrCallerNotAssignedPod
 	}
+	
 	return c.snapShotstorage.PresignedPutURL(ctx, databaseID, SNAPSHOT_UPLOAD_URL_EXPIRY)
 }
 

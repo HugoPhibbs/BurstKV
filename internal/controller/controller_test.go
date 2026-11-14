@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/controller/database"
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/core"
 	"burstkv/internal/db_pod/db_pod_pb"
@@ -33,6 +33,23 @@ func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 func (m *fakePodManager) DeletePod(ctx context.Context, podName string) error {
 	m.deleted++
 	return nil
+}
+
+type fakeSnapshotStorage struct {
+	deleted []string
+}
+
+func (s *fakeSnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string) error {
+	s.deleted = append(s.deleted, databaseID)
+	return nil
+}
+
+func (s *fakeSnapshotStorage) PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
+	return "http://snapshots.test/put" + databaseID, nil
+}
+
+func (s *fakeSnapshotStorage) PresignedGetURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
+	return "http://snapshots.test/get" + databaseID, nil
 }
 
 // Records every RPC sent, keyed by pod IP.
@@ -83,23 +100,6 @@ func (f *fakeClientFactory) NewConnectedClient(podIP string) (db_pod_pb.DBPodCli
 	return f.clients[podIP], func() error { f.closed++; return nil }, nil
 }
 
-type fakeSnapshotStorage struct {
-	deleted []string
-}
-
-func (s *fakeSnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string) error {
-	s.deleted = append(s.deleted, databaseID)
-	return nil
-}
-
-func (s *fakeSnapshotStorage) PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
-	return "http://snapshots.test/put" + databaseID, nil
-}
-
-func (s *fakeSnapshotStorage) PresignedGetURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error) {
-	return "http://snapshots.test/get" + databaseID, nil
-}
-
 type testDeps struct {
 	podManager      *fakePodManager
 	clientFactory   *fakeClientFactory
@@ -122,7 +122,7 @@ func podClientFor(t *testing.T, c *Controller, d *testDeps, id string) *fakePodC
 	db, ok := c.databases.Load(id)
 	require.True(t, ok, "database doesn't exist for the controller")
 	require.NotNil(t, db.Pod, "database %s has no pod", id)
-	return d.clientFactory.clients[db.Pod.PodIP]
+	return d.clientFactory.clients[db.Pod().PodIP]
 }
 
 func TestController_CreateDatabase(t *testing.T) {
