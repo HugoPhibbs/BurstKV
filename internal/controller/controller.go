@@ -157,7 +157,7 @@ func (c *Controller) PauseDatabase(ctx context.Context, databaseID string) error
 }
 
 func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Database, save bool) error {
-	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod().PodIP)
+	client, close, err := c.grpcClientFactory.NewConnectedClient(foundDB.Pod().IP())
 	if err != nil {
 		return err
 	}
@@ -169,10 +169,10 @@ func (c *Controller) stopDatabase(ctx context.Context, foundDB *database.Databas
 		return err
 	}
 
-	if err := c.podManager.DeletePod(ctx, foundDB.Pod().PodName); err != nil {
+	if err := c.podManager.DeletePod(ctx, foundDB.Pod().Name()); err != nil {
 		return err
-
 	}
+
 	foundDB.SetPod(nil)
 	return nil
 }
@@ -250,57 +250,64 @@ func (c *Controller) ClaimWarmPodClient(ctx context.Context) (*pod.Pod, db_pod_p
 		return nil, nil, nil, err
 	}
 
-	client, close, err := c.grpcClientFactory.NewConnectedClient(claimedPod.PodIP)
+	client, close, err := c.grpcClientFactory.NewConnectedClient(claimedPod.IP())
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return claimedPod, client, close, nil
 }
 
-func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string, address string) error {
-	database, ok := c.databases.Load(databaseID)
+func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string) error {
+	primaryDB, ok := c.databases.Load(databaseID)
 	if !ok {
 		return core.ErrDatabaseNotFound
 	}
-	database.Lock()
-	defer database.Unlock()
+	primaryDB.Lock()
+	defer primaryDB.Unlock()
 
-	if database.IsDeleted() {
+	if primaryDB.IsDeleted() {
 		return core.ErrDatabaseNotFound
 	}
 
-	// Find a warm pod to migrate to b
-	claimedPod, err := c.podManager.ClaimWarmPod(ctx)
+	// Find a warm pod for the replica
+	replicaPod, err := c.podManager.ClaimWarmPod(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Replicate
-	replicaClient, closeReplica, err := c.grpcClientFactory.NewConnectedClient(claimedPod.PodIP)
+	replicaClient, closeReplica, err := c.grpcClientFactory.NewConnectedClient(replicaPod.IP())
 	if err != nil {
 		return err
 	}
 	defer closeReplica()
 
-	_, err = replicaClient.ReplicateDatabase(ctx, &db_pod_pb.ReplicateDatabaseRequest{DatabasedId: databaseID, ReplicaAddress: address})
+	primaryAddress := net.JoinHostPort(primaryDB.Pod().IP(), strconv.Itoa(c.proxyPort))
+	_, err = replicaClient.ReplicateDatabase(ctx, &db_pod_pb.ReplicateDatabaseRequest{DatabaseId: databaseID, PrimaryAddress: primaryAddress})
 	if err != nil {
 		return err
 	}
 
 	// Migrate
-	primaryClient, closePrimary, err := c.grpcClientFactory.NewConnectedClient(database.Pod().PodIP)
+	primaryClient, closePrimary, err := c.grpcClientFactory.NewConnectedClient(primaryDB.Pod().IP())
 	if err != nil {
 		return err
 	}
 	defer closePrimary()
 
-	newAddress := net.JoinHostPort(database.Pod().PodIP, strconv.Itoa(c.proxyPort))
-	_, err = primaryClient.MigrateDatabase(ctx, &db_pod_pb.MigrateDatabaseRequest{NewAddress: newAddress})
+	replicaAddress := net.JoinHostPort(replicaPod.IP(), strconv.Itoa(c.proxyPort))
+	_, err = primaryClient.MigrateDatabase(ctx, &db_pod_pb.MigrateDatabaseRequest{ReplicaAddress: replicaAddress})
 	if err != nil {
 		return err
 	}
 
-	database.SetPod(claimedPod)
+	// Shutdown primary
+	err = c.stopDatabase(ctx, primaryDB, false)
+	if err != nil {
+		return err
+	}
+
+	primaryDB.SetPod(replicaPod)
 	return nil
 }
 
@@ -346,7 +353,7 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 		}
 	}
 
-	return fmt.Sprintf("%s:%d", foundDB.Pod().PodIP, c.proxyPort), nil
+	return fmt.Sprintf("%s:%d", foundDB.Pod().IP(), c.proxyPort), nil
 }
 
 // Returns a short-lived presigned URL for uploading the database's snapshot.
@@ -361,10 +368,10 @@ func (c *Controller) SnapshotPutURL(ctx context.Context, databaseID string, call
 		return "", core.ErrDatabasePaused
 	}
 
-	if db.Pod().PodIP != callerIP {
+	if db.Pod().IP() != callerIP {
 		return "", ErrCallerNotAssignedPod
 	}
-	
+
 	return c.snapShotstorage.PresignedPutURL(ctx, databaseID, SNAPSHOT_UPLOAD_URL_EXPIRY)
 }
 

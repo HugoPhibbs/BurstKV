@@ -101,7 +101,7 @@ func newDockerPodManager(t *testing.T, numPods int, controllerGRPCAddress string
 		ip, err := containerIP(name)
 		require.NoError(t, err)
 
-		pm.pods = append(pm.pods, &pod.Pod{PodName: name, PodIP: ip})
+		pm.pods = append(pm.pods, pod.NewPod(name, ip))
 	}
 	return pm
 }
@@ -124,8 +124,8 @@ func (pm *dockerPodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) 
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	for _, p := range pm.pods {
-		if !pm.claimed[p.PodName] {
-			pm.claimed[p.PodName] = true
+		if !pm.claimed[p.Name()] {
+			pm.claimed[p.Name()] = true
 			return p, nil
 		}
 	}
@@ -164,7 +164,7 @@ func startControllerGRPCServer(controller *controller.Controller, port int) {
 func TestController_TestDBLifecycle(t *testing.T) {
 	ctx := t.Context()
 	controllerGRPCPort := 8000
-	pm := newDockerPodManager(t, 3, fmt.Sprintf("host.docker.internal:%d", controllerGRPCPort))
+	pm := newDockerPodManager(t, 5, fmt.Sprintf("host.docker.internal:%d", controllerGRPCPort))
 
 	cf := pod_grpc_client_factory.NewPodGRPCClientFactory(6380)
 
@@ -193,26 +193,37 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	dbAddress, err := c.RouteDatabase(ctx, dbID)
 	assert.NoError(t, err)
 
-	rdb := redis.NewClient(&redis.Options{Addr: dbAddress, Password: dbID})
+	initialRDB := redis.NewClient(&redis.Options{Addr: dbAddress, Password: dbID})
 
 	// Check we can set some data
-	assert.NoError(t, rdb.Ping(ctx).Err())
-	assert.NoError(t, rdb.Set(ctx, "test-k", "test-v", 0).Err())
+	assert.NoError(t, initialRDB.Ping(ctx).Err())
+	assert.NoError(t, initialRDB.Set(ctx, "test-k", "test-v", 0).Err())
 
 	// Pausing
 	assert.NoError(t, c.PauseDatabase(ctx, dbID), "Should be no error when pausing")
-	assert.Error(t, rdb.Ping(ctx).Err()) // Should now no longer be reachable
+	assert.Error(t, initialRDB.Ping(ctx).Err()) // Should now no longer be reachable
 	assert.Error(t, c.PauseDatabase(ctx, dbID), "Should be an error when pausing a paused DB")
 	assert.NoError(t, err)
-	assert.Error(t, rdb.Ping(ctx).Err()) // Should now no longer be reachable
+	assert.Error(t, initialRDB.Ping(ctx).Err()) // Should now no longer be reachable
 
 	// Resume
 	assert.NoError(t, c.ResumeDatabase(ctx, dbID))
-	newDBAddress, err := c.RouteDatabase(ctx, dbID) // Resume gives a new address
-	assert.NotEqual(t, newDBAddress, dbAddress)
-	rdb = redis.NewClient(&redis.Options{Addr: newDBAddress, Password: dbID})
-	assert.NoError(t, rdb.Ping(ctx).Err())
-	val, err := rdb.Get(ctx, "test-k").Result() // Check that we recover the old data
+	resumedDBAddress, err := c.RouteDatabase(ctx, dbID) // Resume gives a new address
+	assert.NotEqual(t, resumedDBAddress, dbAddress)
+	resumedRDB := redis.NewClient(&redis.Options{Addr: resumedDBAddress, Password: dbID})
+	assert.NoError(t, resumedRDB.Ping(ctx).Err())
+	val, err := resumedRDB.Get(ctx, "test-k").Result() // Check that we recover the old data
+	assert.NoError(t, err)
+	assert.Equal(t, "test-v", val)
+
+	// Migrate
+	assert.NoError(t, c.MigrateDatabase(ctx, dbID))
+	migatedDBAddress, err := c.RouteDatabase(ctx, dbID)
+	assert.NotEqual(t, resumedDBAddress, migatedDBAddress)
+	migratedDB := redis.NewClient(&redis.Options{Addr: migatedDBAddress, Password: dbID})
+	assert.NoError(t, migratedDB.Ping(ctx).Err())
+	assert.Error(t, resumedRDB.Ping(ctx).Err()) // Check that the old primary is shutdown
+	val, err = migratedDB.Get(ctx, "test-k").Result() // Check that the data is migrated
 	assert.NoError(t, err)
 	assert.Equal(t, "test-v", val)
 
@@ -221,8 +232,7 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	deletedAddress, err := c.RouteDatabase(ctx, dbID)
 	assert.Equal(t, "", deletedAddress)
 	assert.Error(t, err, core.ErrDatabaseNotFound)
-	rdb = redis.NewClient(&redis.Options{Addr: newDBAddress, Password: dbID})
-	assert.Error(t, rdb.Ping(ctx).Err()) // Check the old DB is shutdown
+	assert.Error(t, migratedDB.Ping(ctx).Err())                             // Check the deleted DB is shutdown
 	snapshotExists, err := snapshotStorage.SnapshotExists(ctx, dbID) // Check the snapshot was deletedd
 	assert.NoError(t, err)
 	assert.False(t, snapshotExists)
