@@ -199,7 +199,7 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	err = utils.WaitUntilReady(ctx, func(ctx context.Context) error {
 		_, err := snapshotStorage.MinioClient().ListBuckets(ctx)
 		return err
-	}, 30*time.Second, 100*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 	require.NoError(t, err, "snapshot server never became ready")
 
 	err = snapshotStorage.MinioClient().MakeBucket(ctx, snapshotStorage.BucketName(), minio.MakeBucketOptions{})
