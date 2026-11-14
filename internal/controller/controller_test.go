@@ -27,7 +27,7 @@ func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 		return nil, core.ErrNoAvailablePods
 	}
 	m.claimed++
-	return &pod.Pod{PodName: fmt.Sprintf("pod-%d", m.claimed), PodIP: fmt.Sprintf("10.0.0.%d", m.claimed)}, nil
+	return pod.NewPod(fmt.Sprintf("pod-%d", m.claimed), fmt.Sprintf("10.0.0.%d", m.claimed)), nil
 }
 
 func (m *fakePodManager) DeletePod(ctx context.Context, podName string) error {
@@ -122,7 +122,7 @@ func podClientFor(t *testing.T, c *Controller, d *testDeps, id string) *fakePodC
 	db, ok := c.databases.Load(id)
 	require.True(t, ok, "database doesn't exist for the controller")
 	require.NotNil(t, db.Pod, "database %s has no pod", id)
-	return d.clientFactory.clients[db.Pod().PodIP]
+	return d.clientFactory.clients[db.Pod().IP()]
 }
 
 func TestController_CreateDatabase(t *testing.T) {
@@ -299,7 +299,7 @@ func TestController_TestClaimWarmPodClient(t *testing.T) {
 	require.NoError(t, err)
 	defer close()
 
-	require.Equal(t, "pod-1", pod.PodName)
-	require.Equal(t, d.clientFactory.clients[pod.PodIP], client, "client should be connected to the pods IP")
+	require.Equal(t, "pod-1", pod.Name())
+	require.Equal(t, d.clientFactory.clients[pod.IP()], client, "client should be connected to the pods IP")
 	assert.Equal(t, 1, d.clientFactory.opened)
 }

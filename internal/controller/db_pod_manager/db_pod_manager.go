@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -65,7 +65,7 @@ func (p *PodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 		// one gets a Conflict error and moves on to the next pod.
 		claimed, err := p.k8s.CoreV1().Pods(p.k8sNameSpace).Update(ctx, foundPod, metav1.UpdateOptions{})
 		if err == nil {
-			claimedPod := &pod.Pod{PodName: claimed.Name, PodIP: claimed.Status.PodIP}
+			claimedPod := pod.NewPod(claimed.Name, claimed.Status.PodIP)
 			return claimedPod, nil
 		}
 	}

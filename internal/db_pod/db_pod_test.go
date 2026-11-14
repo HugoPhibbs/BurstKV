@@ -36,7 +36,7 @@ type MockControllerClient struct {
 	gotReq *controller_pb.GetSnapshotUploadURLRequest
 }
 
-func (mc *MockControllerClient) GetSnapshotUploadURL(
+func (mc *MockControllerClient) GetSnapshotPutURL(
 	ctx context.Context,
 	req *controller_pb.GetSnapshotUploadURLRequest,
 	opts ...grpc.CallOption) (
