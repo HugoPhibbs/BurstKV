@@ -9,6 +9,7 @@ import (
 	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/utils"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -161,6 +162,21 @@ func startControllerGRPCServer(controller *controller.Controller, port int) {
 	}
 }
 
+// Gets the Docker bridge gateway.
+// Used so the Snapshot server is accessable locally, and within containers seemlessly, as if it was a remote IP
+func dockerGatewayIP() (string, error) {
+	out, err := exec.Command("docker", "network", "inspect", "bridge",
+		"-f", "{{(index .IPAM.Config 0).Gateway}}").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("inspecting docker bridge: %w: %s", err, out)
+	}
+	gw := strings.TrimSpace(string(out))
+	if gw == "" {
+		return "", errors.New("docker bridge network has no gateway")
+	}
+	return gw, nil
+}
+
 func TestController_TestDBLifecycle(t *testing.T) {
 	ctx := t.Context()
 	controllerGRPCPort := 8000
@@ -175,8 +191,11 @@ func TestController_TestDBLifecycle(t *testing.T) {
 
 	creds := credentials.NewStaticV4(ak, sk, "")
 	// Get the IP of the Docker Gateway (works from within a container and locally)
-	snapshotStorage := snapshot_storage.NewSnapshotStorage(fmt.Sprintf("172.18.0.1:%d", snapshortPort), "snapshots", creds, false)
-	err := snapshotStorage.MinioClient().MakeBucket(ctx, snapshotStorage.BucketName(), minio.MakeBucketOptions{})
+	
+	gatewayIP, err := dockerGatewayIP()
+	assert.NoError(t, err)
+	snapshotStorage := snapshot_storage.NewSnapshotStorage(fmt.Sprintf("%s:%d", gatewayIP, snapshortPort), "snapshots", creds, false)
+	err = snapshotStorage.MinioClient().MakeBucket(ctx, snapshotStorage.BucketName(), minio.MakeBucketOptions{})
 	require.NoError(t, err)
 
 	redisPort := 6379
