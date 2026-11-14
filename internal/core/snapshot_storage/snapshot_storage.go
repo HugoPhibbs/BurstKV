@@ -137,3 +137,11 @@ func (s *SnapshotStorage) SnapshotLastUpdateTime(ctx context.Context, databaseID
 	}
 	return info.LastModified.Unix(), nil
 }
+
+func (s *SnapshotStorage) MinioClient() *minio.Client {
+	return s.minioClient
+}
+
+func (s *SnapshotStorage) BucketName() string {
+	return s.bucketName
+}
