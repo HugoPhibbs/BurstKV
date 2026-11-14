@@ -198,10 +198,10 @@ func (x *CreateDatabaseRequest) GetDatabaseId() string {
 }
 
 type MigrateDatabaseRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NewAddress    string                 `protobuf:"bytes,1,opt,name=newAddress,proto3" json:"newAddress,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ReplicaAddress string                 `protobuf:"bytes,1,opt,name=replicaAddress,proto3" json:"replicaAddress,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MigrateDatabaseRequest) Reset() {
@@ -234,17 +234,17 @@ func (*MigrateDatabaseRequest) Descriptor() ([]byte, []int) {
 	return file_proto_db_pod_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *MigrateDatabaseRequest) GetNewAddress() string {
+func (x *MigrateDatabaseRequest) GetReplicaAddress() string {
 	if x != nil {
-		return x.NewAddress
+		return x.ReplicaAddress
 	}
 	return ""
 }
 
 type ReplicateDatabaseRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	DatabasedId    string                 `protobuf:"bytes,1,opt,name=databased_id,json=databasedId,proto3" json:"databased_id,omitempty"`
-	ReplicaAddress string                 `protobuf:"bytes,2,opt,name=replica_address,json=replicaAddress,proto3" json:"replica_address,omitempty"`
+	DatabaseId     string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	PrimaryAddress string                 `protobuf:"bytes,2,opt,name=primaryAddress,proto3" json:"primaryAddress,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -279,16 +279,16 @@ func (*ReplicateDatabaseRequest) Descriptor() ([]byte, []int) {
 	return file_proto_db_pod_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *ReplicateDatabaseRequest) GetDatabasedId() string {
+func (x *ReplicateDatabaseRequest) GetDatabaseId() string {
 	if x != nil {
-		return x.DatabasedId
+		return x.DatabaseId
 	}
 	return ""
 }
 
-func (x *ReplicateDatabaseRequest) GetReplicaAddress() string {
+func (x *ReplicateDatabaseRequest) GetPrimaryAddress() string {
 	if x != nil {
-		return x.ReplicaAddress
+		return x.PrimaryAddress
 	}
 	return ""
 }
@@ -307,14 +307,13 @@ const file_proto_db_pod_proto_rawDesc = "" +
 	"\aget_url\x18\x02 \x01(\tR\x06getUrl\"8\n" +
 	"\x15CreateDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseId\"8\n" +
-	"\x16MigrateDatabaseRequest\x12\x1e\n" +
-	"\n" +
-	"newAddress\x18\x01 \x01(\tR\n" +
-	"newAddress\"f\n" +
-	"\x18ReplicateDatabaseRequest\x12!\n" +
-	"\fdatabased_id\x18\x01 \x01(\tR\vdatabasedId\x12'\n" +
-	"\x0freplica_address\x18\x02 \x01(\tR\x0ereplicaAddress2\xbb\x02\n" +
+	"databaseId\"@\n" +
+	"\x16MigrateDatabaseRequest\x12&\n" +
+	"\x0ereplicaAddress\x18\x01 \x01(\tR\x0ereplicaAddress\"c\n" +
+	"\x18ReplicateDatabaseRequest\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId\x12&\n" +
+	"\x0eprimaryAddress\x18\x02 \x01(\tR\x0eprimaryAddress2\xbb\x02\n" +
 	"\x05DBPod\x12>\n" +
 	"\x0eResumeDatabase\x12\x1d.db_pod.ResumeDatabaseRequest\x1a\r.db_pod.Empty\x12D\n" +
 	"\x11ReplicateDatabase\x12 .db_pod.ReplicateDatabaseRequest\x1a\r.db_pod.Empty\x12@\n" +

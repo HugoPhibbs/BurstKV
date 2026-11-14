@@ -28,10 +28,10 @@ message CreateDatabaseRequest {
 }
 
 message MigrateDatabaseRequest {
-  string newAddress = 1;
+  string replicaAddress = 1;
 }
 
 message ReplicateDatabaseRequest {
   string database_id = 1;
-  string replica_address = 2;
+  string primaryAddress = 2;
 }

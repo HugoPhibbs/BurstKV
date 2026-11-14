@@ -44,14 +44,14 @@ func (s *PodGRPCServer) ResumeDatabase(ctx context.Context, req *pb.ResumeDataba
 }
 
 func (s *PodGRPCServer) ReplicateDatabase(ctx context.Context, req *pb.ReplicateDatabaseRequest) (*pb.Empty, error) {
-	if err := s.dbPod.ReplicateDatabase(ctx, req.GetDatabasedId(), req.GetReplicaAddress()); err != nil {
+	if err := s.dbPod.ReplicateDatabase(ctx, req.GetDatabaseId(), req.GetPrimaryAddress()); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
 }
 
 func (s *PodGRPCServer) MigrateDatabase(ctx context.Context, req *pb.MigrateDatabaseRequest) (*pb.Empty, error) {
-	if err := s.dbPod.MigrateDatabase(ctx, req.GetNewAddress()); err != nil {
+	if err := s.dbPod.MigrateDatabase(ctx, req.GetReplicaAddress()); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil

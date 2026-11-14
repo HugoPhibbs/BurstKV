@@ -136,12 +136,12 @@ func (d *DBPod) startRedisServer(ctx context.Context, password string, extraArgs
 }
 
 // Migrate this Redis DB to a new address
-func (d *DBPod) MigrateDatabase(ctx context.Context, newAddress string) error {
+func (d *DBPod) MigrateDatabase(ctx context.Context, replicaAddress string) error {
 	if d.redisServerStartCmd == nil {
 		return ErrNoDatabaseRunningOnPod
 	}
 
-	host, port, err := net.SplitHostPort(newAddress)
+	host, port, err := net.SplitHostPort(replicaAddress)
 	if err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func (d *DBPod) saveSnapshot(ctx context.Context) error {
 		return err
 	}
 	defer close()
-	res, err := controllerClient.GetSnapshotUploadURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.DatabaseID})
+	res, err := controllerClient.GetSnapshotPutURL(ctx, &controller_pb.GetSnapshotUploadURLRequest{DatabaseId: d.DatabaseID})
 	if err != nil {
 		return err
 	}
