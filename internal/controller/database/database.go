@@ -10,9 +10,9 @@ import (
 type Database struct {
 	mu             sync.Mutex
 	id             string
-	Pod            *pod.Pod
+	pod            atomic.Pointer[pod.Pod]
 	latestActivity atomic.Int64 // thread-safe
-	IsDeleted      bool
+	isDeleted      atomic.Bool
 }
 
 func NewDatabase(id string) *Database {
@@ -54,6 +54,22 @@ func (db *Database) IsActiveAndIdle(idleLimit time.Duration) bool {
 	return time.Since(*lastRequest) > idleLimit
 }
 
+func (db *Database) SetPod(p *pod.Pod) {
+	db.pod.Store(p)
+}
+
+func (db *Database) Pod() *pod.Pod {
+	return db.pod.Load()
+}
+
 func (db *Database) IsRunning() bool {
-	return db.Pod != nil
+	return db.Pod() != nil
+}
+
+func (db *Database) IsDeleted() bool {
+	return db.isDeleted.Load()
+}
+
+func (db *Database) SetIsDeleted(d bool) {
+	db.isDeleted.Store(d)
 }

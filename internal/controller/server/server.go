@@ -2,7 +2,7 @@ package server
 
 import (
 	"burstkv/internal/controller"
-	"burstkv/internal/controller/domain/database"
+	"burstkv/internal/controller/database"
 	"burstkv/internal/core"
 	"errors"
 	"net/http"
