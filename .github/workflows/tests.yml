@@ -18,7 +18,37 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y redis-server
       
       - run: go vet ./...
+      
+      - name: Debug rustfs (temporary)
+        run: |
+          set -x
+          id
+          umask
 
-      - run: docker pull rustfs/rustfs:1.0.4 # To run the Snapshot server
+          GW=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
+          echo "bridge gateway: $GW"
+
+          mkdir -p .snapshot_server_dev/data .snapshot_server_dev/logs
+          ls -ld .snapshot_server_dev .snapshot_server_dev/*
+
+          docker image inspect rustfs/rustfs:1.0.4 --format 'image user: {{.Config.User}}'
+
+          docker run -d --name rfs-debug -p 9000:9000 \
+            -v "$PWD/.snapshot_server_dev/data:/data" \
+            -v "$PWD/.snapshot_server_dev/logs:/logs" \
+            -e RUSTFS_ACCESS_KEY=ak-dev -e RUSTFS_SECRET_KEY=sk-dev \
+            rustfs/rustfs:1.0.4
+
+          sleep 5
+
+          docker ps -a --filter name=rfs-debug
+          docker inspect rfs-debug --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}'
+          docker logs rfs-debug 2>&1 | tail -50
+
+          curl -sv "http://$GW:9000/" || true
+          curl -sv "http://localhost:9000/" || true
+
+          docker rm -f rfs-debug
 
       - run: go test -v ./...
+      

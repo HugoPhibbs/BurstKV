@@ -139,17 +139,16 @@ func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error
 }
 
 func startSnapshotServer(t *testing.T, port int, ak string, sk string) error {
-	cmd := exec.Command("python", "./scripts/start_dev_snapshot_server.py",
-		"-n", "snapshot-server-test",
-		"-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
+	name := "snapshot-server-test"
+	cmd := exec.Command("python", "./scripts/start_dev_snapshot_server.py", "-n", name, "-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
 	cmd.Dir = "../.."
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("starting snapshot server: %w\n%s", err, out)
+	out, err := cmd.CombinedOutput() // waits for the script, captures stdout+stderr
+	if err != nil {
+		return fmt.Errorf("starting snapshot server: \n%s \n%w", out, err)
 	}
 
 	t.Cleanup(func() {
-		exec.Command("docker", "rm", "-f", "snapshot-server-test").Run()
+		exec.Command("docker", "rm", "-f", name).Run()
 	})
 	return nil
 }
@@ -203,7 +202,7 @@ func TestController_TestDBLifecycle(t *testing.T) {
 			return err
 		}
 		return conn.Close()
-	}, 10*time.Second, 100*time.Millisecond)
+	}, 15*time.Second, 100*time.Millisecond)
 	require.NoError(t, err, "snapshot server never became ready")
 
 	err = snapshotStorage.MinioClient().MakeBucket(ctx, snapshotStorage.BucketName(), minio.MakeBucketOptions{})
