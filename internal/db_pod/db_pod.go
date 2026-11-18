@@ -2,6 +2,7 @@ package db_pod
 
 import (
 	"burstkv/internal/controller/controller_pb"
+	"burstkv/internal/core/snapshot_storage"
 	"context"
 	"errors"
 	"fmt"
@@ -214,11 +215,6 @@ func (d *DBPod) saveSnapshot(ctx context.Context) error {
 	}
 	defer f.Close()
 
-	info, err := f.Stat()
-	if err != nil {
-		return err
-	}
-
 	controllerClient, close, err := d.controllerClientFactory.NewConnectedClient()
 	if err != nil {
 		return err
@@ -229,21 +225,12 @@ func (d *DBPod) saveSnapshot(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, res.GetUrl(), f)
+	info, err := f.Stat()
 	if err != nil {
 		return err
 	}
-	req.ContentLength = info.Size()
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upload snapshot: %s", resp.Status)
-	}
-	return nil
+	return snapshot_storage.UploadSnapshot(ctx, f, res.GetUrl(), info.Size())
 }
 
 func (d *DBPod) loadSnapshot(ctx context.Context, getURL string) error {

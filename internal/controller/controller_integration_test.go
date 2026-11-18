@@ -6,23 +6,18 @@ import (
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/controller/pod_grpc_client_factory"
 	"burstkv/internal/core"
-	"burstkv/internal/core/snapshot_storage"
+	snapshot_storage_test "burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -138,43 +133,12 @@ func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error
 	return nil
 }
 
-func startSnapshotServer(t *testing.T, port int, ak string, sk string) error {
-	name := "snapshot-server-test"
-	cmd := exec.Command("python", "./scripts/start_dev_snapshot_server.py", "-n", name, "-nv", "-d", "-p", strconv.Itoa(port), "-ak", ak, "-sk", sk)
-	cmd.Dir = "../.."
-	out, err := cmd.CombinedOutput() // waits for the script, captures stdout+stderr
-	fmt.Printf("output from starting snapshot server \n%s", out)
-	if err != nil {
-		return fmt.Errorf("starting snapshot server: \n%w", err)
-	}
-
-	t.Cleanup(func() {
-		exec.Command("docker", "rm", "-f", name).Run()
-	})
-	return nil
-}
-
 func startControllerGRPCServer(controller *controller.Controller, port int) {
 	grpcAddr := utils.PortToLocalAddr(port)
 	log.Default().Println("Controller gRPC listening on " + grpcAddr)
 	if err := controller_grpc.NewControllerGRPCServer(controller).ListenAndServe(grpcAddr); err != nil {
 		log.Println(err)
 	}
-}
-
-// Gets the Docker bridge gateway.
-// Used so the Snapshot server is accessable locally, and within containers seemlessly, as if it was a remote IP
-func dockerGatewayIP() (string, error) {
-	out, err := exec.Command("docker", "network", "inspect", "bridge",
-		"-f", "{{(index .IPAM.Config 0).Gateway}}").CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("inspecting docker bridge: %w: %s", err, out)
-	}
-	gw := strings.TrimSpace(string(out))
-	if gw == "" {
-		return "", errors.New("docker bridge network has no gateway")
-	}
-	return gw, nil
 }
 
 func TestController_TestDBLifecycle(t *testing.T) {
@@ -184,30 +148,8 @@ func TestController_TestDBLifecycle(t *testing.T) {
 
 	cf := pod_grpc_client_factory.NewPodGRPCClientFactory(6380)
 
-	ak := "ak-dev"
-	sk := "sk-dev"
 	snapshortPort := 9000
-	require.NoError(t, startSnapshotServer(t, snapshortPort, ak, sk))
-	creds := credentials.NewStaticV4(ak, sk, "")
-	// Get the IP of the Docker Gateway (works from within a container and locally)
-
-	gatewayIP, err := dockerGatewayIP()
-	assert.NoError(t, err)
-
-	snapshotAddress := net.JoinHostPort(gatewayIP, strconv.Itoa(snapshortPort))
-	snapshotStorage := snapshot_storage.NewSnapshotStorage(snapshotAddress, "snapshots", creds, false)
-
-	err = utils.WaitUntilReady(ctx, func(ctx context.Context) error {
-		conn, err := net.DialTimeout("tcp", snapshotAddress, time.Second)
-		if err != nil {
-			return err
-		}
-		return conn.Close()
-	}, 15*time.Second, 100*time.Millisecond)
-	require.NoError(t, err, "snapshot server never became ready")
-
-	err = snapshotStorage.MinioClient().MakeBucket(ctx, snapshotStorage.BucketName(), minio.MakeBucketOptions{})
-	require.NoError(t, err)
+	snapshotStorage := snapshot_storage_test.CreateNewTestServer(t, snapshortPort)
 
 	redisPort := 6379
 

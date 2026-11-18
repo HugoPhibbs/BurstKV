@@ -1,10 +1,10 @@
 package snapshot_storage
 
 import (
-	"archive/tar"
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -34,48 +34,16 @@ func NewSnapshotStorage(storageURL string, bucketName string, minioCreds *creden
 	}
 }
 
+func (s *SnapshotStorage) MinioClient() *minio.Client {
+	return s.minioClient
+}
+
+func (s *SnapshotStorage) BucketName() string {
+	return s.bucketName
+}
+
 func (s *SnapshotStorage) snapshotObjectName(databaseID string) string {
 	return fmt.Sprintf("%s/dump.rdb", databaseID)
-}
-
-func (s *SnapshotStorage) LoadSnapshot(ctx context.Context, databaseID string, writer io.Writer) error {
-	objectName := s.snapshotObjectName(databaseID)
-	obj, err := s.minioClient.GetObject(ctx, s.bucketName, objectName, minio.GetObjectOptions{})
-	if err != nil {
-		return err
-	}
-
-	defer obj.Close()
-
-	info, err := obj.Stat()
-	if err != nil {
-		return err
-	}
-	tarWriter := tar.NewWriter(writer)
-	if err := tarWriter.WriteHeader(&tar.Header{
-		Name: "dump.rdb",
-		Size: info.Size,
-		Mode: 0644,
-	}); err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(tarWriter, obj); err != nil {
-		return err
-	}
-
-	return tarWriter.Close()
-}
-
-func (s *SnapshotStorage) SaveSnapshot(ctx context.Context, databaseID string, tarStream io.Reader) error {
-	tarReader := tar.NewReader(tarStream)
-	header, err := tarReader.Next()
-	if err != nil {
-		return err
-	}
-	objectName := s.snapshotObjectName(databaseID)
-	_, err = s.minioClient.PutObject(ctx, s.bucketName, objectName, tarReader, header.Size, minio.PutObjectOptions{})
-	return err
 }
 
 func (s *SnapshotStorage) SnapshotExists(ctx context.Context, databaseID string) (bool, error) {
@@ -129,19 +97,22 @@ func (s *SnapshotStorage) NumSnapshots(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func (s *SnapshotStorage) SnapshotLastUpdateTime(ctx context.Context, databaseID string) (int64, error) {
-	objectName := s.snapshotObjectName(databaseID)
-	info, err := s.minioClient.StatObject(ctx, s.bucketName, objectName, minio.StatObjectOptions{})
+// Uploads content from a reader using the given PUT URL
+func UploadSnapshot(ctx context.Context, reader io.Reader, putURL string, contentLength int64) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, putURL, reader)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return info.LastModified.Unix(), nil
-}
 
-func (s *SnapshotStorage) MinioClient() *minio.Client {
-	return s.minioClient
-}
+	req.ContentLength = contentLength
 
-func (s *SnapshotStorage) BucketName() string {
-	return s.bucketName
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("upload snapshot: %s", resp.Status)
+	}
+	return nil
 }
