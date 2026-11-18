@@ -22,5 +22,12 @@
 	"containerEnv": {
 		"CLAUDE_CONFIG_DIR": "/home/node/.claude",
 		"CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "true"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"DrBlury.protobuf-vsc"
+			]
+		}
 	}
 }
