@@ -30,21 +30,21 @@ func (s *PodGRPCServer) ListenAndServe(addr string) error {
 }
 
 func (s *PodGRPCServer) CreateDatabase(ctx context.Context, req *pb.CreateDatabaseRequest) (*pb.Empty, error) {
-	if err := s.dbPod.CreateDatabase(ctx, req.GetDatabaseId()); err != nil {
+	if err := s.dbPod.CreateDatabase(ctx, req.GetDatabaseId(), req.GetPassword()); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
 }
 
 func (s *PodGRPCServer) ResumeDatabase(ctx context.Context, req *pb.ResumeDatabaseRequest) (*pb.Empty, error) {
-	if err := s.dbPod.ResumeDatabase(ctx, req.GetDatabaseId(), req.GetGetUrl()); err != nil {
+	if err := s.dbPod.ResumeDatabase(ctx, req.GetDatabaseId(), req.GetPassword(), req.GetGetUrl()); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
 }
 
 func (s *PodGRPCServer) ReplicateDatabase(ctx context.Context, req *pb.ReplicateDatabaseRequest) (*pb.Empty, error) {
-	if err := s.dbPod.ReplicateDatabase(ctx, req.GetDatabaseId(), req.GetPrimaryAddress()); err != nil {
+	if err := s.dbPod.ReplicateDatabase(ctx, req.GetDatabaseId(), req.GetPassword(), req.GetMasterAddress()); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil

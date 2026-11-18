@@ -17,6 +17,7 @@ import (
 )
 
 const DB_ID_LENGTH = 8
+const DB_PW_LENGTH = 16
 
 type PodManager interface {
 	ClaimWarmPod(ctx context.Context) (*pod.Pod, error)
@@ -212,7 +213,7 @@ func (c *Controller) resumeDatabaseHelper(ctx context.Context, DB *database.Data
 		return nil
 	}
 
-	_, err = podClient.ResumeDatabase(ctx, &db_pod_pb.ResumeDatabaseRequest{DatabaseId: DB.ID(), GetUrl: getUrl})
+	_, err = podClient.ResumeDatabase(ctx, &db_pod_pb.ResumeDatabaseRequest{DatabaseId: DB.ID(), Password: DB.Password(), GetUrl: getUrl})
 
 	if err != nil {
 		return err
@@ -222,26 +223,27 @@ func (c *Controller) resumeDatabaseHelper(ctx context.Context, DB *database.Data
 	return nil
 }
 
-// Creates a new database and returns the new database ID
-func (c *Controller) CreateDatabase(ctx context.Context) (string, error) {
+// Creates a new database and returns the new database ID and password
+func (c *Controller) CreateDatabase(ctx context.Context) (string, string, error) {
 	newDatabaseID := utils.RandomString(DB_ID_LENGTH)
-	newDB := database.NewDatabase(newDatabaseID)
+	newDatabasePassword := utils.RandomString(DB_PW_LENGTH)
+	newDB := database.NewDatabase(newDatabaseID, newDatabasePassword)
 
 	claimedPod, podClient, close, err := c.ClaimWarmPodClient(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer close()
 
-	_, err = podClient.CreateDatabase(ctx, &db_pod_pb.CreateDatabaseRequest{DatabaseId: newDatabaseID})
+	_, err = podClient.CreateDatabase(ctx, &db_pod_pb.CreateDatabaseRequest{DatabaseId: newDatabaseID, Password: newDatabasePassword})
 
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	newDB.SetPod(claimedPod)
 	c.databases.Store(newDatabaseID, newDB)
-	return newDatabaseID, nil
+	return newDatabaseID, newDatabasePassword, nil
 }
 
 func (c *Controller) ClaimWarmPodClient(ctx context.Context) (*pod.Pod, db_pod_pb.DBPodClient, func() error, error) {
@@ -283,7 +285,7 @@ func (c *Controller) MigrateDatabase(ctx context.Context, databaseID string) err
 	defer closeReplica()
 
 	primaryAddress := net.JoinHostPort(primaryDB.Pod().IP(), strconv.Itoa(c.proxyPort))
-	_, err = replicaClient.ReplicateDatabase(ctx, &db_pod_pb.ReplicateDatabaseRequest{DatabaseId: databaseID, PrimaryAddress: primaryAddress})
+	_, err = replicaClient.ReplicateDatabase(ctx, &db_pod_pb.ReplicateDatabaseRequest{DatabaseId: databaseID, Password: primaryDB.Password(), MasterAddress: primaryAddress})
 	if err != nil {
 		return err
 	}
@@ -334,7 +336,7 @@ func (c *Controller) StartIdleDatabaseReaper(ctx context.Context) {
 }
 
 // Routes a database to it's pod address. Context should be timed
-func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (string, error) {
+func (c *Controller) RouteDatabase(ctx context.Context, databaseID string, password string) (string, error) {
 	foundDB, exists := c.databases.Load(databaseID)
 	if !exists {
 		return "", core.ErrDatabaseNotFound
@@ -345,6 +347,10 @@ func (c *Controller) RouteDatabase(ctx context.Context, databaseID string) (stri
 
 	if foundDB.IsDeleted() {
 		return "", core.ErrDatabaseNotFound
+	}
+
+	if foundDB.Password() != password {
+		return "", ErrDatabaseWrongAuth
 	}
 
 	if !foundDB.IsRunning() {

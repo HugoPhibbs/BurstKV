@@ -2,9 +2,8 @@ package redis_proxy
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,9 +11,6 @@ import (
 	"strings"
 	"time"
 )
-
-// Max args / bytes per arg accepted in the first command, so a bad client can't make us allocate huge buffers.
-const maxFirstCommandSize = 1024
 
 type activityReader struct {
 	r              io.Reader
@@ -30,7 +26,7 @@ func (ar *activityReader) Read(p []byte) (int, error) {
 }
 
 type Router interface {
-	RouteDatabase(ctx context.Context, databaseID string) (string, error)
+	RouteDatabase(ctx context.Context, databaseID string, password string) (string, error)
 	RecordDatabaseActivity(databaseID string) error
 }
 
@@ -63,22 +59,27 @@ func (p *RedisProxy) ListenAndServe(ctx context.Context) error {
 func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
 	defer clientConn.Close()
 
-	// Everything read while parsing is copied into `first`, so it can be replayed upstream as-is.
-	var first bytes.Buffer
-	cmd, err := readCommand(bufio.NewReader(io.TeeReader(clientConn, &first)))
+	clientReader := bufio.NewReader(clientConn)
+
+	authCmd, err := readCommand(clientReader) // Read the first one
 	if err != nil {
 		return
 	}
 
-	databaseID := databaseIDFromCommand(cmd)
-	if databaseID == "" {
-		io.WriteString(clientConn, "-NOAUTH connect with redis://:<db-id>@host:port\r\n")
+	tokenIdx, err := tokenIndex(authCmd)
+	if err != nil {
+		return
+	}
+
+	databaseID, password, err := splitToken(authCmd[tokenIdx])
+	if err != nil {
+		io.WriteString(clientConn, "-NOAUTH connect using the supplied token as the password")
 		return
 	}
 
 	routeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	addr, err := p.router.RouteDatabase(routeCtx, databaseID)
+	addr, err := p.router.RouteDatabase(routeCtx, databaseID, password)
 
 	if err != nil {
 		io.WriteString(clientConn, "-ERR "+err.Error()+"\r\n")
@@ -93,72 +94,101 @@ func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
 	}
 	defer upstream.Close()
 
-	recordActivity := func() { 
+	authCmd[tokenIdx] = password
+	if _, err := io.WriteString(upstream, encodeCommand(authCmd)); err != nil {
+		log.Printf("proxy: auth upstream %s for database %s: %v", addr, databaseID, err)
+		io.WriteString(clientConn, "-ERR database unavailable\r\n")
+		return
+	}
+
+	recordActivity := func() {
 		if err := p.router.RecordDatabaseActivity(databaseID); err != nil {
 			log.Println(err)
 		}
 	}
-	done := make(chan struct{}, 2)
+	done := make(chan struct{}, 2) // One chan spot for client and upstream
 	pipe := func(dst io.Writer, src io.Reader) {
 		io.Copy(dst, src)
 		done <- struct{}{}
 	}
-	go pipe(upstream, &activityReader{r: io.MultiReader(&first, clientConn), recordActivity: recordActivity})
+	go pipe(upstream, &activityReader{r: clientReader, recordActivity: recordActivity})
 	go pipe(clientConn, upstream)
 	<-done
 }
 
-// The database ID is the password in AUTH <pass>, AUTH <user> <pass>, or HELLO <ver> AUTH <user> <pass>.
-func databaseIDFromCommand(cmd []string) string {
-	if len(cmd) == 0 {
-		return ""
+// Reads one RESP command, e.g. "*2\r\n$4\r\nAUTH\r\n$3\r\nabc\r\n" -> ["AUTH", "abc"].
+// Each arg is a "$<n>" line followed by the value line. We ignore <n> and read the value up
+// to "\r\n", which is fine for auth commands (tokens are alphanumeric + "_").
+func readCommand(r *bufio.Reader) ([]string, error) {
+	const MAX_FIRST_CMD_ARGS = 16
+
+	header, err := readLine(r)
+	if err != nil || !strings.HasPrefix(header, "*") {
+		return nil, ErrAuthCommandIncorrect
 	}
+	n, err := strconv.Atoi(header[1:])
+	if err != nil || n < 1 || n > MAX_FIRST_CMD_ARGS {
+		return nil, ErrAuthCommandIncorrect
+	}
+	cmd := make([]string, n)
+	for i := range cmd {
+		if _, err := readLine(r); err != nil { // "$<n>", not needed
+			return nil, ErrAuthCommandIncorrect
+		}
+		if cmd[i], err = readLine(r); err != nil {
+			return nil, ErrAuthCommandIncorrect
+		}
+	}
+	return cmd, nil
+}
+
+// Returns the index of the token in an auth command, or -1 if it isn't one. Supports:
+//
+//	AUTH <token>
+//	AUTH <user> <token>
+//	HELLO <ver> AUTH <user> <token> [...]   (what go-redis v9 sends)
+func tokenIndex(cmd []string) (int, error) {
 	switch strings.ToUpper(cmd[0]) {
 	case "AUTH":
-		return cmd[len(cmd)-1]
+		if len(cmd) == 2 || len(cmd) == 3 {
+			return len(cmd) - 1, nil
+		}
 	case "HELLO":
 		for i := 1; i+2 < len(cmd); i++ {
 			if strings.EqualFold(cmd[i], "AUTH") {
-				return cmd[i+2]
+				return i + 2, nil
 			}
 		}
 	}
-	return ""
+	return -1, ErrAuthCommandIncorrect
 }
 
-// Reads one RESP command, e.g. "*2\r\n$4\r\nAUTH\r\n$3\r\nabc\r\n" -> ["AUTH", "abc"].
-func readCommand(r *bufio.Reader) ([]string, error) {
-	// Reads a "<prefix><n>\r\n" header line and returns n.
-	header := func(prefix byte) (int, error) {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			return 0, err
-		}
-		if len(line) < 3 || line[0] != prefix {
-			return 0, errors.New("malformed RESP")
-		}
-		n, err := strconv.Atoi(strings.TrimSpace(line[1:]))
-		if err != nil || n < 0 || n > maxFirstCommandSize {
-			return 0, errors.New("malformed RESP")
-		}
-		return n, nil
+// Encodes a command as RESP, e.$4\r\nAUTH\r\n$2\r\npw\r\n".
+func encodeCommand(cmd []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "*%d\r\n", len(cmd))
+	for _, arg := range cmd {
+		fmt.Fprintf(&b, "$%d\r\n%s\r\n", len(arg), arg)
+	}
+	return b.String()
+}
+
+func readLine(r *bufio.Reader) (string, error) {
+	line, err := r.ReadSlice('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(line), "\r\n"), nil
+}
+
+func splitToken(token string) (string, string, error) {
+	parts := strings.Split(token, "_")
+
+	if len(parts) != 2 {
+		return "", "", ErrAuthCommandIncorrect
 	}
 
-	n, err := header('*')
-	if err != nil {
-		return nil, err
-	}
-	args := make([]string, n)
-	for i := range n {
-		size, err := header('$')
-		if err != nil {
-			return nil, err
-		}
-		buf := make([]byte, size+2) // +2 for the trailing \r\n
-		if _, err := io.ReadFull(r, buf); err != nil {
-			return nil, err
-		}
-		args[i] = string(buf[:size])
-	}
-	return args, nil
+	dbID, pw := parts[0], parts[1]
+
+	return dbID, pw, nil
 }

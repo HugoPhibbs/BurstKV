@@ -129,7 +129,7 @@ func TestController_CreateDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, d := newTestController(time.Minute, 1)
 
-	id, err := c.CreateDatabase(ctx)
+	id, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 
 	state, err := c.GetDatabaseState(id)
@@ -145,7 +145,7 @@ func TestController_CreateDatabase(t *testing.T) {
 func TestController_CreateDatabase_NoPods(t *testing.T) {
 	c, _ := newTestController(time.Minute, 0)
 
-	_, err := c.CreateDatabase(t.Context())
+	_, _, err := c.CreateDatabase(t.Context())
 	assert.ErrorIs(t, err, core.ErrNoAvailablePods)
 	assert.Empty(t, c.GetAllDatabaseIDs())
 }
@@ -154,7 +154,7 @@ func TestController_PauseAndResumeDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, d := newTestController(time.Minute, 2)
 
-	id, err := c.CreateDatabase(ctx)
+	id, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 	firstClient := podClientFor(t, c, d, id)
 
@@ -184,7 +184,7 @@ func TestController_DeleteRunningDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, d := newTestController(time.Minute, 1)
 
-	id, err := c.CreateDatabase(ctx)
+	id, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 	client := podClientFor(t, c, d, id)
 
@@ -204,7 +204,7 @@ func TestController_DeletePausedDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, d := newTestController(time.Minute, 1)
 
-	id, err := c.CreateDatabase(ctx)
+	id, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 	client := podClientFor(t, c, d, id)
 	require.NoError(t, c.PauseDatabase(ctx, id))
@@ -227,7 +227,7 @@ func TestController_UnknownDatabase(t *testing.T) {
 	assert.ErrorIs(t, c.ResumeDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
 	assert.ErrorIs(t, c.DeleteDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
 	assert.ErrorIs(t, c.RecordDatabaseActivity("missing"), core.ErrDatabaseNotFound)
-	_, err = c.RouteDatabase(ctx, "missing")
+	_, err = c.RouteDatabase(ctx, "missing", "pw")
 	assert.ErrorIs(t, err, core.ErrDatabaseNotFound)
 }
 
@@ -235,9 +235,9 @@ func TestController_GetAllDatabaseIDs(t *testing.T) {
 	ctx := t.Context()
 	c, _ := newTestController(time.Minute, 2)
 
-	id1, err := c.CreateDatabase(ctx)
+	id1, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
-	id2, err := c.CreateDatabase(ctx)
+	id2, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, []string{id1, id2}, c.GetAllDatabaseIDs())
@@ -247,16 +247,22 @@ func TestController_RouteDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, _ := newTestController(time.Minute, 2)
 
-	id, err := c.CreateDatabase(ctx)
+	id, pw, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
+	require.NotEqual(t, "", id)
+	require.NotEqual(t, "", pw)
 
-	addr, err := c.RouteDatabase(ctx, id)
+	addr, err := c.RouteDatabase(ctx, id, pw)
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.1:6379", addr)
 
+	// Wrong PW
+	addr, err = c.RouteDatabase(ctx, id, "wrong")
+	require.ErrorIs(t, ErrDatabaseWrongAuth, err)
+
 	// Routing to a paused database resumes it on a new pod.
 	require.NoError(t, c.PauseDatabase(ctx, id))
-	addr, err = c.RouteDatabase(ctx, id)
+	addr, err = c.RouteDatabase(ctx, id, pw)
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.2:6379", addr)
 
@@ -268,14 +274,14 @@ func TestController_ReapIdleDatabases(t *testing.T) {
 	ctx := t.Context()
 	c, d := newTestController(-time.Second, 2)
 
-	idleDB, err := c.CreateDatabase(ctx)
+	idleDB, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 	require.NoError(t, c.RecordDatabaseActivity(idleDB))
 	idleClient := podClientFor(t, c, d, idleDB)
 	state, _ := c.GetDatabaseState(idleDB)
 	assert.Equal(t, database.Running, state)
 
-	unusedDB, err := c.CreateDatabase(ctx)
+	unusedDB, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 
 	require.NoError(t, c.PauseDatabase(ctx, unusedDB))

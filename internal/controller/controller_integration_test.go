@@ -216,14 +216,14 @@ func TestController_TestDBLifecycle(t *testing.T) {
 	go startControllerGRPCServer(c, controllerGRPCPort)
 
 	// Create
-	dbID, err := c.CreateDatabase(ctx)
+	dbID, pw, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 	require.NotEqual(t, dbID, "")
 
-	dbAddress, err := c.RouteDatabase(ctx, dbID)
+	dbAddress, err := c.RouteDatabase(ctx, dbID, pw)
 	assert.NoError(t, err)
 
-	initialRDB := redis.NewClient(&redis.Options{Addr: dbAddress, Password: dbID})
+	initialRDB := redis.NewClient(&redis.Options{Addr: dbAddress, Password: pw})
 
 	// Check we can set some data
 	assert.NoError(t, initialRDB.Ping(ctx).Err())
@@ -238,9 +238,9 @@ func TestController_TestDBLifecycle(t *testing.T) {
 
 	// Resume
 	assert.NoError(t, c.ResumeDatabase(ctx, dbID))
-	resumedDBAddress, err := c.RouteDatabase(ctx, dbID) // Resume gives a new address
+	resumedDBAddress, err := c.RouteDatabase(ctx, dbID, pw) // Resume gives a new address
 	assert.NotEqual(t, resumedDBAddress, dbAddress)
-	resumedRDB := redis.NewClient(&redis.Options{Addr: resumedDBAddress, Password: dbID})
+	resumedRDB := redis.NewClient(&redis.Options{Addr: resumedDBAddress, Password: pw})
 	assert.NoError(t, resumedRDB.Ping(ctx).Err())
 	val, err := resumedRDB.Get(ctx, "test-k").Result() // Check that we recover the old data
 	assert.NoError(t, err)
@@ -248,9 +248,9 @@ func TestController_TestDBLifecycle(t *testing.T) {
 
 	// Migrate
 	assert.NoError(t, c.MigrateDatabase(ctx, dbID))
-	migatedDBAddress, err := c.RouteDatabase(ctx, dbID)
+	migatedDBAddress, err := c.RouteDatabase(ctx, dbID, pw)
 	assert.NotEqual(t, resumedDBAddress, migatedDBAddress)
-	migratedDB := redis.NewClient(&redis.Options{Addr: migatedDBAddress, Password: dbID})
+	migratedDB := redis.NewClient(&redis.Options{Addr: migatedDBAddress, Password: pw})
 	assert.NoError(t, migratedDB.Ping(ctx).Err())
 	assert.Error(t, resumedRDB.Ping(ctx).Err())       // Check that the old primary is shutdown
 	val, err = migratedDB.Get(ctx, "test-k").Result() // Check that the data is migrated
@@ -259,7 +259,7 @@ func TestController_TestDBLifecycle(t *testing.T) {
 
 	// Delete
 	assert.NoError(t, c.DeleteDatabase(ctx, dbID))
-	deletedAddress, err := c.RouteDatabase(ctx, dbID)
+	deletedAddress, err := c.RouteDatabase(ctx, dbID, pw)
 	assert.Equal(t, "", deletedAddress)
 	assert.Error(t, err, core.ErrDatabaseNotFound)
 	assert.Error(t, migratedDB.Ping(ctx).Err())                      // Check the deleted DB is shutdown

@@ -10,14 +10,16 @@ import (
 type Database struct {
 	mu             sync.Mutex
 	id             string
+	password       string
 	pod            atomic.Pointer[pod.Pod]
 	latestActivity atomic.Int64 // thread-safe
 	isDeleted      atomic.Bool
 }
 
-func NewDatabase(id string) *Database {
+func NewDatabase(id string, password string) *Database {
 	return &Database{
 		id: id,
+		password: password,
 	}
 }
 
@@ -31,6 +33,10 @@ func (db *Database) Unlock() {
 
 func (db *Database) ID() string {
 	return db.id
+}
+
+func (db *Database) Password() string {
+	return db.password
 }
 
 func (db *Database) RecordActivity() {

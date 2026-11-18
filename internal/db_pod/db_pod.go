@@ -30,6 +30,7 @@ type ControllerGRPCClientFactory interface {
 
 type DBPod struct {
 	DatabaseID              string
+	password                string
 	redisServerStartCmd     *exec.Cmd
 	redisPort               int
 	redisClient             *redis.Client
@@ -49,32 +50,34 @@ func (d *DBPod) dumpPath() string {
 	return filepath.Join(d.dataDir, "dump.rdb")
 }
 
-func (d *DBPod) CreateDatabase(ctx context.Context, databaseID string) error {
+func (d *DBPod) CreateDatabase(ctx context.Context, databaseID string, password string) error {
 	d.DatabaseID = databaseID
+	d.password = password
 
-	return d.startRedisServer(ctx, databaseID, nil)
+	return d.startRedisServer(ctx, password, nil)
 }
 
-func (d *DBPod) ResumeDatabase(ctx context.Context, databaseID string, getURL string) error {
-	d.DatabaseID = databaseID
-
+func (d *DBPod) ResumeDatabase(ctx context.Context, databaseID string, password string, getURL string) error {
 	if err := d.loadSnapshot(ctx, getURL); err != nil {
 		return err
 	}
+	
+	d.DatabaseID = databaseID
+	d.password = password
 
-	return d.startRedisServer(ctx, databaseID, nil)
+	return d.startRedisServer(ctx, password, nil)
 }
 
 // Replicates the contents of another database into this pod
-func (d *DBPod) ReplicateDatabase(ctx context.Context, replicaDatabaseID string, primaryAddress string) error {
-	host, port, err := net.SplitHostPort(primaryAddress)
+func (d *DBPod) ReplicateDatabase(ctx context.Context, databaseID string, password string, masterAddress string) error {
+	host, port, err := net.SplitHostPort(masterAddress)
 	if err != nil {
 		return err
 	}
 
-	extraArgs := []string{"--replicaof", host, port, "--masterauth", replicaDatabaseID}
+	extraArgs := []string{"--replicaof", host, port}
 
-	if err := d.startRedisServer(ctx, replicaDatabaseID, extraArgs); err != nil {
+	if err := d.startRedisServer(ctx, password, extraArgs); err != nil {
 		return err
 	}
 
@@ -87,7 +90,8 @@ func (d *DBPod) ReplicateDatabase(ctx context.Context, replicaDatabaseID string,
 		return err
 	}
 
-	d.DatabaseID = replicaDatabaseID
+	d.DatabaseID = databaseID
+	d.password = password
 
 	return nil
 }
@@ -288,7 +292,7 @@ func (d *DBPod) Stop(ctx context.Context, save bool) error {
 
 	// By default, a client tries to reconnect to the server, even after it's shutdown (?)
 	// So create a new client that doesn't try to reconnect.
-	shutdownClient := d.newRedisClient(d.DatabaseID)
+	shutdownClient := d.newRedisClient(d.password)
 	shutdownClient.Options().MaxRetries = 0
 
 	if err := shutdownClient.ShutdownNoSave(ctx).Err(); err != nil {

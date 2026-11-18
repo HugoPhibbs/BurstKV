@@ -35,12 +35,12 @@ func New(ctrl *controller.Controller) *gin.Engine {
 	})
 
 	router.POST("/database", func(c *gin.Context) {
-		databaseID, err := ctrl.CreateDatabase(c.Request.Context())
+		databaseID, password, err := ctrl.CreateDatabase(c.Request.Context())
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"databaseID": databaseID})
+		c.JSON(http.StatusOK, gin.H{"databaseID": databaseID, "password": password})
 	})
 
 	router.DELETE("/database/delete/:databaseID", func(c *gin.Context) {

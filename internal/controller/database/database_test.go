@@ -15,7 +15,7 @@ func TestMain(m *testing.M) {
 
 func TestRedisDB_TestUpdateLastRequest(t *testing.T) {
 	// Create a new RedisDB instance
-	rdb := NewDatabase("test_db")
+	rdb := NewDatabase("test_db", "pw")
 
 	// Test that the last request time is initially nil
 	assert.Nil(t, rdb.LatestActivity(), "expected LastRequestTime to be nil initially")
