@@ -56,12 +56,19 @@ func (p *RedisProxy) ListenAndServe(ctx context.Context) error {
 	}
 }
 
+// Handles proxying a connection from a client to a database
+// As a compromise for simplicity, we don't support ACL, and used token based auth
+// Tokens identify a database, and authenticate to a database. Usernames are ignored by the proxy (forwarded only)
+// To use this properly in the future, the database id should be embeded in the connection URL, 
+// This should allow a more seamless experience betwwen a client and the serverless DB 
+//  - we won't have to couple ourselves to RESP - and allow the Redis DB to handle it themselves.
 func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
 	defer clientConn.Close()
 
 	clientReader := bufio.NewReader(clientConn)
 
-	authCmd, err := readCommand(clientReader) // Read the first one
+	// Auth cmd should be the first CMD, so extract it
+	authCmd, err := readCommand(clientReader) 
 	if err != nil {
 		return
 	}
@@ -76,16 +83,18 @@ func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
 		io.WriteString(clientConn, "-NOAUTH connect using the supplied token as the password")
 		return
 	}
-
+	
+	// Find the address of the requested database
 	routeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	addr, err := p.router.RouteDatabase(routeCtx, databaseID, password)
 
+	addr, err := p.router.RouteDatabase(routeCtx, databaseID, password)
 	if err != nil {
 		io.WriteString(clientConn, "-ERR "+err.Error()+"\r\n")
 		return
 	}
 
+	// Dial the database to check it's up
 	upstream, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Printf("proxy: dial %s for database %s: %v", addr, databaseID, err)
@@ -94,6 +103,8 @@ func (p *RedisProxy) handle(ctx context.Context, clientConn net.Conn) {
 	}
 	defer upstream.Close()
 
+	// Reset the Auth to use the password instead of the token
+	// Since we have read the first cmd (auth), we add it back here
 	authCmd[tokenIdx] = password
 	if _, err := io.WriteString(upstream, encodeCommand(authCmd)); err != nil {
 		log.Printf("proxy: auth upstream %s for database %s: %v", addr, databaseID, err)
