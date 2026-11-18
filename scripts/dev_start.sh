@@ -10,8 +10,7 @@ eval $(minikube docker-env)
 docker build -f docker/Dockerfile.db_pod     -t burstkv-dbpod:latest .
 docker build -f docker/Dockerfile.controller -t burstkv-controller:latest .
 
-kubectl apply -f deploy/controller.yaml
-kubectl apply -f deploy/db-pods.yaml
+kubectl apply -f deploy/deployment.yaml
 
 kubectl rollout status deploy/burstkv-controller --timeout=120s
 
