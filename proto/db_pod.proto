@@ -20,11 +20,13 @@ message StopRequest {
 
 message ResumeDatabaseRequest {
   string database_id = 1;
-  string get_url = 2;
+  string password = 2;
+  string get_url = 3;
 }
 
 message CreateDatabaseRequest {
   string database_id = 1;
+  string password = 2;
 }
 
 message MigrateDatabaseRequest {
@@ -33,5 +35,6 @@ message MigrateDatabaseRequest {
 
 message ReplicateDatabaseRequest {
   string database_id = 1;
-  string primaryAddress = 2;
+  string password = 2;
+  string masterAddress = 3;
 }

@@ -104,7 +104,8 @@ func (x *StopRequest) GetSave() bool {
 type ResumeDatabaseRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
-	GetUrl        string                 `protobuf:"bytes,2,opt,name=get_url,json=getUrl,proto3" json:"get_url,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	GetUrl        string                 `protobuf:"bytes,3,opt,name=get_url,json=getUrl,proto3" json:"get_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -146,6 +147,13 @@ func (x *ResumeDatabaseRequest) GetDatabaseId() string {
 	return ""
 }
 
+func (x *ResumeDatabaseRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
 func (x *ResumeDatabaseRequest) GetGetUrl() string {
 	if x != nil {
 		return x.GetUrl
@@ -156,6 +164,7 @@ func (x *ResumeDatabaseRequest) GetGetUrl() string {
 type CreateDatabaseRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -193,6 +202,13 @@ func (*CreateDatabaseRequest) Descriptor() ([]byte, []int) {
 func (x *CreateDatabaseRequest) GetDatabaseId() string {
 	if x != nil {
 		return x.DatabaseId
+	}
+	return ""
+}
+
+func (x *CreateDatabaseRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
 	}
 	return ""
 }
@@ -242,11 +258,12 @@ func (x *MigrateDatabaseRequest) GetReplicaAddress() string {
 }
 
 type ReplicateDatabaseRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DatabaseId     string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
-	PrimaryAddress string                 `protobuf:"bytes,2,opt,name=primaryAddress,proto3" json:"primaryAddress,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	MasterAddress string                 `protobuf:"bytes,3,opt,name=masterAddress,proto3" json:"masterAddress,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ReplicateDatabaseRequest) Reset() {
@@ -286,9 +303,16 @@ func (x *ReplicateDatabaseRequest) GetDatabaseId() string {
 	return ""
 }
 
-func (x *ReplicateDatabaseRequest) GetPrimaryAddress() string {
+func (x *ReplicateDatabaseRequest) GetPassword() string {
 	if x != nil {
-		return x.PrimaryAddress
+		return x.Password
+	}
+	return ""
+}
+
+func (x *ReplicateDatabaseRequest) GetMasterAddress() string {
+	if x != nil {
+		return x.MasterAddress
 	}
 	return ""
 }
@@ -300,20 +324,23 @@ const file_proto_db_pod_proto_rawDesc = "" +
 	"\x12proto/db_pod.proto\x12\x06db_pod\"\a\n" +
 	"\x05Empty\"!\n" +
 	"\vStopRequest\x12\x12\n" +
-	"\x04save\x18\x01 \x01(\bR\x04save\"Q\n" +
+	"\x04save\x18\x01 \x01(\bR\x04save\"m\n" +
 	"\x15ResumeDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseId\x12\x17\n" +
-	"\aget_url\x18\x02 \x01(\tR\x06getUrl\"8\n" +
+	"databaseId\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x17\n" +
+	"\aget_url\x18\x03 \x01(\tR\x06getUrl\"T\n" +
 	"\x15CreateDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseId\"@\n" +
+	"databaseId\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\"@\n" +
 	"\x16MigrateDatabaseRequest\x12&\n" +
-	"\x0ereplicaAddress\x18\x01 \x01(\tR\x0ereplicaAddress\"c\n" +
+	"\x0ereplicaAddress\x18\x01 \x01(\tR\x0ereplicaAddress\"}\n" +
 	"\x18ReplicateDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseId\x12&\n" +
-	"\x0eprimaryAddress\x18\x02 \x01(\tR\x0eprimaryAddress2\xbb\x02\n" +
+	"databaseId\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12$\n" +
+	"\rmasterAddress\x18\x03 \x01(\tR\rmasterAddress2\xbb\x02\n" +
 	"\x05DBPod\x12>\n" +
 	"\x0eResumeDatabase\x12\x1d.db_pod.ResumeDatabaseRequest\x1a\r.db_pod.Empty\x12D\n" +
 	"\x11ReplicateDatabase\x12 .db_pod.ReplicateDatabaseRequest\x1a\r.db_pod.Empty\x12@\n" +

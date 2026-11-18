@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Pings rdb until it replies or 10s pass. Timeout in seconds
+// Pings rdb until it replies. Timeout in seconds
 func WaitForRedis(ctx context.Context, rdb *redis.Client, timeout int) error {
 	check := func(ctx context.Context) error {return rdb.Ping(ctx).Err()}
 	return WaitUntilReady(ctx, check, time.Duration(timeout) * time.Second, 100 * time.Millisecond)

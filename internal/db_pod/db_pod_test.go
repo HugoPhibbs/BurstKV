@@ -93,10 +93,10 @@ func requireRedis(t *testing.T) {
 	}
 }
 
-func newRedisClient(databaseID string, port int) *redis.Client {
+func newRedisClient(password string, port int) *redis.Client {
 	return redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("localhost:%d", port),
-		Password: databaseID,
+		Password: password,
 	})
 }
 
@@ -151,7 +151,7 @@ func TestAssign_SnapshotNotFound(t *testing.T) {
 
 	port := 6390
 	d := &DBPod{dataDir: t.TempDir(), redisPort: port}
-	err := d.ResumeDatabase(t.Context(), "db-1", srv.URL)
+	err := d.ResumeDatabase(t.Context(), "db-1", "pw", srv.URL)
 
 	require.ErrorIs(t, err, ErrSnapshotNotFound)
 	require.Nil(t, d.redisServerStartCmd, "redis should not have been started")
@@ -177,10 +177,10 @@ func TestDBPod_TestPausingAndResumingWithSnapshot(t *testing.T) {
 
 	port := 6390
 	pod := &DBPod{dataDir: t.TempDir(), redisPort: port, controllerClientFactory: factory}
-	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
+	require.NoError(t, pod.CreateDatabase(ctx, "db-1", "pw"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
-	rdb := newRedisClient("db-1", port)
+	rdb := newRedisClient("pw", port)
 	require.NoError(t, rdb.Set(ctx, "k", "v", 0).Err())
 	rdb.Close()
 
@@ -190,10 +190,10 @@ func TestDBPod_TestPausingAndResumingWithSnapshot(t *testing.T) {
 	require.NotEmpty(t, store.stored, "snapshot should have been uploaded")
 
 	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: port, controllerClientFactory: factory}
-	require.NoError(t, pod2.ResumeDatabase(ctx, "db-1", srv.URL))
+	require.NoError(t, pod2.ResumeDatabase(ctx, "db-1", "pw", srv.URL))
 	t.Cleanup(func() { pod2.Stop(context.Background(), false) })
 
-	rdb2 := newRedisClient("db-1", port)
+	rdb2 := newRedisClient("pw", port)
 	defer rdb2.Close()
 	got, err := rdb2.Get(ctx, "k").Result()
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestDBPod_RequiresPassword(t *testing.T) {
 
 	port := 6390
 	pod := &DBPod{dataDir: t.TempDir(), redisPort: port}
-	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
+	require.NoError(t, pod.CreateDatabase(ctx, "db-1", "pw"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
 	wrongClient := newRedisClient("not-the-password", port)
@@ -226,7 +226,7 @@ func TestDBPod_StopWithSave_UploadFails(t *testing.T) {
 	port := 6390
 	factory := &mockClientFactory{client: &MockControllerClient{url: srv.URL}}
 	pod := &DBPod{dataDir: t.TempDir(), redisPort: port, controllerClientFactory: factory}
-	require.NoError(t, pod.CreateDatabase(ctx, "db-1"))
+	require.NoError(t, pod.CreateDatabase(ctx, "db-1", "pw"))
 	t.Cleanup(func() { pod.Stop(context.Background(), false) })
 
 	err := pod.Stop(ctx, true)
@@ -240,28 +240,28 @@ func TestDBPod_TestReplicating(t *testing.T) {
 
 	port1 := 6390
 	pod1 := &DBPod{dataDir: t.TempDir(), redisPort: port1}
-	require.NoError(t, pod1.CreateDatabase(ctx, "db-1"))
+	require.NoError(t, pod1.CreateDatabase(ctx, "db-1", "pw"))
 	t.Cleanup(func() { pod1.Stop(context.Background(), false) })
 
 	port2 := 6391
 	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: port2}
 	t.Cleanup(func() { pod2.Stop(context.Background(), false) })
 
-	client1 := newRedisClient("db-1", port1)
+	client1 := newRedisClient("pw", port1)
 	defer client1.Close()
 
-	valKeys := map[string]string{"a": "1", "b": "2", "c": "3"}
+	keyVals := map[string]string{"a": "1", "b": "2", "c": "3"}
 
-	for k, v := range valKeys {
+	for k, v := range keyVals {
 		require.NoError(t, client1.Set(ctx, k, v, 0).Err())
 	}
 
-	require.NoError(t, pod2.ReplicateDatabase(ctx, "db-1", fmt.Sprintf("localhost:%d", port1)))
+	require.NoError(t, pod2.ReplicateDatabase(ctx, "db-1", "pw", fmt.Sprintf("localhost:%d", port1)))
 
-	client2 := newRedisClient("db-1", port2)
+	client2 := newRedisClient("pw", port2)
 	defer client2.Close()
 
-	for k, v := range valKeys {
+	for k, v := range keyVals {
 		got, err := client2.Get(ctx, k).Result()
 		require.NoError(t, err)
 		require.Equal(t, v, got)
@@ -276,14 +276,14 @@ func TestDBPod_TestMigrating(t *testing.T) {
 
 	port1 := 6392
 	pod1 := &DBPod{dataDir: t.TempDir(), redisPort: port1}
-	require.NoError(t, pod1.CreateDatabase(ctx, "db-1"))
+	require.NoError(t, pod1.CreateDatabase(ctx, "db-1", "pw"))
 	t.Cleanup(func() { pod1.Stop(context.Background(), false) })
 
 	port2 := 6393
 	pod2 := &DBPod{dataDir: t.TempDir(), redisPort: port2}
 	t.Cleanup(func() { pod2.Stop(context.Background(), false) })
 
-	client1 := newRedisClient("db-1", port1)
+	client1 := newRedisClient("pw", port1)
 	defer client1.Close()
 
 	valKeys := map[string]string{"a": "1", "b": "2", "c": "3"}
@@ -292,9 +292,9 @@ func TestDBPod_TestMigrating(t *testing.T) {
 		require.NoError(t, client1.Set(ctx, k, v, 0).Err())
 	}
 
-	require.NoError(t, pod2.ReplicateDatabase(ctx, "db-1", fmt.Sprintf("127.0.0.1:%d", port1)))
+	require.NoError(t, pod2.ReplicateDatabase(ctx, "db-1", "pw", fmt.Sprintf("127.0.0.1:%d", port1)))
 
-	client2 := newRedisClient("db-1", port2)
+	client2 := newRedisClient("pw", port2)
 	defer client2.Close()
 
 	for k, v := range valKeys {
