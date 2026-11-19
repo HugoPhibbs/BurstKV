@@ -49,12 +49,6 @@
             "command": "kubectl logs -f deploy/burstkv-controller",
             "problemMatcher": []
         },       
-        {
-            "label": "start tui",
-            "type": "shell",
-            "command": "go build -o bin/tui ./cmd/tui && ./bin/tui ${input:controllerAddr}",
-            "problemMatcher": "$go"
-        }
     ],
     "inputs": [
         {
