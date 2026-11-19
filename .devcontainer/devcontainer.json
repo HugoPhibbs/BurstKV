@@ -26,7 +26,8 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"DrBlury.protobuf-vsc"
+				"DrBlury.protobuf-vsc",
+				"ms-azuretools.vscode-docker"
 			]
 		}
 	}
