@@ -38,11 +38,39 @@
             "problemMatcher": []
         },
         {
+            "label": "Build controller image",
+            "type": "shell",
+            "command": "docker build -f docker/Dockerfile.controller -t burstkv-controller:${input:imageVersion} .",
+            "problemMatcher": []
+        },
+        {
+            "label": "build images",
+            "type": "shell",
+            "dependsOn": [
+                "Build controller image",
+                "Build db image"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
             "label": "start dev cluster",
             "type": "shell",
             "command": "chmod +x ./scripts/dev_start.sh && ./scripts/dev_start.sh",
             "problemMatcher": []
         },
+        {
+            "label": "controller logs",
+            "type": "shell",
+            "command": "kubectl logs -f deploy/burstkv-controller",
+            "problemMatcher": []
+        },       
+        {
+            "label": "start tui",
+            "type": "shell",
+            "command": "go build -o bin/tui ./cmd/tui && ./bin/tui ${input:controllerAddr}",
+            "problemMatcher": "$go"
+        }
     ],
     "inputs": [
         {
@@ -50,6 +78,12 @@
             "type": "promptString",
             "description": "Image version",
             "default": "latest"
+        },
+        {
+            "id": "controllerAddr",
+            "type": "promptString",
+            "description": "Controller server address",
+            "default": "http://localhost:6378"
         }
     ]
 }
