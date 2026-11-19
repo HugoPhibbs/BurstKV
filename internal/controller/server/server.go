@@ -2,7 +2,6 @@ package server
 
 import (
 	"burstkv/internal/controller"
-	"burstkv/internal/controller/database"
 	"burstkv/internal/core"
 	"errors"
 	"net/http"
@@ -13,25 +12,25 @@ import (
 func New(ctrl *controller.Controller) *gin.Engine {
 	router := gin.Default()
 
-	router.GET("/database/list", func(c *gin.Context) {
-		databases := ctrl.GetAllDatabaseIDs()
-		if databases == nil {
-			databases = []string{}
+	router.GET("/database", func(c *gin.Context) {
+		statuses, err := ctrl.GetAllDatabaseStatuses(c.Request.Context())
+		if err != nil {
+			writeError(c, err)
 		}
-		c.JSON(http.StatusOK, gin.H{"databases": databases})
+		c.JSON(http.StatusOK, gin.H{"databases": statuses})
 	})
 
 	router.GET("/database/:databaseID", func(c *gin.Context) {
-		state, err := ctrl.GetDatabaseState(c.Param("databaseID"))
+		status, err := ctrl.GetDatabaseStatus(c.Request.Context(), c.Param("databaseID"))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		if state == database.NotFound {
+		if status == nil {
 			writeError(c, core.ErrDatabaseNotFound)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"status": state.String()})
+		c.JSON(http.StatusOK, gin.H{"status": status})
 	})
 
 	router.POST("/database", func(c *gin.Context) {

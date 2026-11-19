@@ -5,6 +5,7 @@ import (
 	"burstkv/internal/controller/controller_grpc"
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/controller/pod_grpc_client_factory"
+	"burstkv/internal/controller/pod_resources.go"
 	"burstkv/internal/core"
 	snapshot_storage_test "burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
@@ -30,6 +31,31 @@ type dockerPodManager struct {
 	mu      sync.Mutex
 	pods    []*pod.Pod
 	claimed map[string]bool // podName -> claimed
+}
+
+func (pm *dockerPodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	for _, p := range pm.pods {
+		if !pm.claimed[p.Name()] {
+			pm.claimed[p.Name()] = true
+			return p, nil
+		}
+	}
+	return nil, core.ErrNoAvailablePods
+}
+
+func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error {
+	return nil
+}
+
+
+func (pm *dockerPodManager) PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
+	return nil, nil // TODO
+}
+
+func (pm *dockerPodManager) PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
+	return nil, nil // TODO
 }
 
 func TestMain(m *testing.M) {
@@ -115,22 +141,6 @@ func containerIP(name string) (string, error) {
 		return "", fmt.Errorf("container %s has no IP", name)
 	}
 	return ip, nil
-}
-
-func (pm *dockerPodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-	for _, p := range pm.pods {
-		if !pm.claimed[p.Name()] {
-			pm.claimed[p.Name()] = true
-			return p, nil
-		}
-	}
-	return nil, core.ErrNoAvailablePods
-}
-
-func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error {
-	return nil
 }
 
 func startControllerGRPCServer(controller *controller.Controller, port int) {

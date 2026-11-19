@@ -13,7 +13,7 @@ import (
 )
 
 func newTestPodManager(k8s *fake.Clientset, namespace string) *PodManager {
-	return &PodManager{k8s: k8s, k8sNameSpace: namespace}
+	return &PodManager{k8sInterface: k8s, k8sNameSpace: namespace}
 }
 
 func warmPod(name, ip string) *corev1.Pod {

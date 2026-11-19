@@ -1,8 +1,8 @@
 package controller
 
 import (
-	"burstkv/internal/controller/database"
 	"burstkv/internal/controller/pod"
+	"burstkv/internal/controller/pod_resources.go"
 	"burstkv/internal/core"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"context"
@@ -33,6 +33,20 @@ func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 func (m *fakePodManager) DeletePod(ctx context.Context, podName string) error {
 	m.deleted++
 	return nil
+}
+
+func (m *fakePodManager) PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
+	return &pod_resources.PodResources{
+		Memory: 64,
+		Cpu:    25,
+	}, nil
+}
+
+func (m *fakePodManager) PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
+	return &pod_resources.PodResources{
+		Memory: 128,
+		Cpu:    50,
+	}, nil
 }
 
 type fakeSnapshotStorage struct {
@@ -132,10 +146,6 @@ func TestController_CreateDatabase(t *testing.T) {
 	id, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
 
-	state, err := c.GetDatabaseState(id)
-	require.NoError(t, err)
-	assert.Equal(t, database.Running, state)
-
 	client := podClientFor(t, c, d, id)
 	require.Len(t, client.creates, 1)
 	assert.Equal(t, id, client.creates[0].DatabaseId)
@@ -164,8 +174,6 @@ func TestController_PauseAndResumeDatabase(t *testing.T) {
 	assert.True(t, firstClient.stops[0].Save, "pause should save a snapshot")
 	assert.Equal(t, d.podManager.deleted, 1, "Pausing should increase the number of deleted pods")
 
-	state, _ := c.GetDatabaseState(id)
-	assert.Equal(t, database.Paused, state)
 	assert.ErrorIs(t, c.PauseDatabase(ctx, id), core.ErrDatabaseAlreadyPaused)
 	assert.Equal(t, d.podManager.deleted, 1, "Pausing a paused db shouldn't increasing the number of deleted pods")
 
@@ -174,8 +182,6 @@ func TestController_PauseAndResumeDatabase(t *testing.T) {
 	require.Len(t, secondClient.resumes, 1)
 	assert.Equal(t, id, secondClient.resumes[0].DatabaseId)
 
-	state, _ = c.GetDatabaseState(id)
-	assert.Equal(t, database.Running, state)
 	assert.ErrorIs(t, c.ResumeDatabase(ctx, id), core.ErrDatabaseAlreadyActive)
 	assert.Equal(t, d.clientFactory.opened, d.clientFactory.closed, "every connection should be closed")
 }
@@ -196,8 +202,6 @@ func TestController_DeleteRunningDatabase(t *testing.T) {
 	assert.Equal(t, []string{id}, d.snapshotStorage.deleted)
 	assert.Equal(t, d.podManager.deleted, 1)
 
-	state, _ := c.GetDatabaseState(id)
-	assert.Equal(t, database.NotFound, state)
 }
 
 func TestController_DeletePausedDatabase(t *testing.T) {
@@ -219,15 +223,11 @@ func TestController_UnknownDatabase(t *testing.T) {
 	ctx := t.Context()
 	c, _ := newTestController(time.Minute, 1)
 
-	state, err := c.GetDatabaseState("missing")
-	require.NoError(t, err)
-	assert.Equal(t, database.NotFound, state)
-
 	assert.ErrorIs(t, c.PauseDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
 	assert.ErrorIs(t, c.ResumeDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
 	assert.ErrorIs(t, c.DeleteDatabase(ctx, "missing"), core.ErrDatabaseNotFound)
 	assert.ErrorIs(t, c.RecordDatabaseActivity("missing"), core.ErrDatabaseNotFound)
-	_, err = c.RouteDatabase(ctx, "missing", "pw")
+	_, err := c.RouteDatabase(ctx, "missing", "pw")
 	assert.ErrorIs(t, err, core.ErrDatabaseNotFound)
 }
 
@@ -265,9 +265,6 @@ func TestController_RouteDatabase(t *testing.T) {
 	addr, err = c.RouteDatabase(ctx, id, pw)
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.2:6379", addr)
-
-	state, _ := c.GetDatabaseState(id)
-	assert.Equal(t, database.Running, state)
 }
 
 func TestController_ReapIdleDatabases(t *testing.T) {
@@ -278,8 +275,6 @@ func TestController_ReapIdleDatabases(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, c.RecordDatabaseActivity(idleDB))
 	idleClient := podClientFor(t, c, d, idleDB)
-	state, _ := c.GetDatabaseState(idleDB)
-	assert.Equal(t, database.Running, state)
 
 	unusedDB, _, err := c.CreateDatabase(ctx)
 	require.NoError(t, err)
@@ -288,13 +283,8 @@ func TestController_ReapIdleDatabases(t *testing.T) {
 
 	c.reapIdleDatabases(ctx)
 
-	state, _ = c.GetDatabaseState(idleDB)
-	assert.Equal(t, database.Paused, state) // Check that its reaped
 	require.Len(t, idleClient.stops, 1)
 	assert.True(t, idleClient.stops[0].Save)
-
-	state, _ = c.GetDatabaseState(unusedDB)
-	assert.Equal(t, database.Paused, state) // Already paused
 }
 
 func TestController_TestClaimWarmPodClient(t *testing.T) {
@@ -308,4 +298,56 @@ func TestController_TestClaimWarmPodClient(t *testing.T) {
 	require.Equal(t, "pod-1", pod.Name())
 	require.Equal(t, d.clientFactory.clients[pod.IP()], client, "client should be connected to the pods IP")
 	assert.Equal(t, 1, d.clientFactory.opened)
+}
+
+func TestController_TestGettingDatabaseStatus(t *testing.T) {
+	ctx := t.Context()
+	c, _ := newTestController(-time.Second, 2)
+
+	databaseID, _, err := c.CreateDatabase(ctx)
+	require.NoError(t, err)
+
+	status, err := c.GetDatabaseStatus(ctx, databaseID)
+
+	assert.True(t, status.Running)
+	assert.NotNil(t, status.UsedPodResources)
+	assert.NotNil(t, status.MaxPodResources)
+
+	require.NoError(t, c.PauseDatabase(ctx, databaseID))
+
+	status, err = c.GetDatabaseStatus(ctx, databaseID)
+
+	assert.False(t, status.Running)
+	assert.Nil(t, status.UsedPodResources)
+	assert.Nil(t, status.MaxPodResources)
+
+	require.NoError(t, c.DeleteDatabase(ctx, databaseID))
+
+	status, err = c.GetDatabaseStatus(ctx, databaseID)
+
+	assert.Error(t, err)
+	assert.Nil(t, status)
+}
+
+func TestController_TestGettingAllDatabaseStatuses(t *testing.T) {
+	ctx := t.Context()
+	c, _ := newTestController(-time.Second, 3)
+
+	db1, _, err := c.CreateDatabase(ctx)
+	require.NoError(t, err)
+
+	db2, _, err := c.CreateDatabase(ctx)
+	require.NoError(t, err)
+
+	db3, _, err := c.CreateDatabase(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, c.PauseDatabase(ctx, db3))
+
+	statuses, err := c.GetAllDatabaseStatuses(ctx)
+
+	assert.Equal(t, 3, len(statuses))
+	assert.True(t, statuses[db1].Running)
+	assert.True(t, statuses[db2].Running)
+	assert.False(t, statuses[db3].Running)
 }
