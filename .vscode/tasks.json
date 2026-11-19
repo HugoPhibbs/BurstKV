@@ -38,22 +38,6 @@
             "problemMatcher": []
         },
         {
-            "label": "Build controller image",
-            "type": "shell",
-            "command": "docker build -f docker/Dockerfile.controller -t burstkv-controller:${input:imageVersion} .",
-            "problemMatcher": []
-        },
-        {
-            "label": "build images",
-            "type": "shell",
-            "dependsOn": [
-                "Build controller image",
-                "Build db image"
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": []
-        },
-        {
             "label": "start dev cluster",
             "type": "shell",
             "command": "chmod +x ./scripts/dev_start.sh && ./scripts/dev_start.sh",
