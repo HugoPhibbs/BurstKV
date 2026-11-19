@@ -7,12 +7,15 @@ fi
 
 eval $(minikube docker-env)
 
+minikube addons enable metrics-server
+
 docker build -f docker/Dockerfile.db_pod     -t burstkv-dbpod:latest .
 docker build -f docker/Dockerfile.controller -t burstkv-controller:latest .
 
 kubectl apply -f deploy/deployment.yaml
 
-kubectl rollout status deploy/burstkv-controller --timeout=120s
+kubectl rollout restart deploy/burstkv-controller # Refresh the Image rollout
+kubectl rollout status deploy/burstkv-controller --timeout=120s # Wait for the images to be rolled out 
 
 kubectl get pods -l 'burstkv/role in (controller,warm)'
 kubectl logs deploy/burstkv-controller
