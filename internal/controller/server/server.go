@@ -16,8 +16,9 @@ func New(ctrl *controller.Controller) *gin.Engine {
 		statuses, err := ctrl.GetAllDatabaseStatuses(c.Request.Context())
 		if err != nil {
 			writeError(c, err)
+			return
 		}
-		c.JSON(http.StatusOK, gin.H{"databases": statuses})
+		c.JSON(http.StatusOK, gin.H{"statuses": statuses})
 	})
 
 	router.GET("/database/:databaseID", func(c *gin.Context) {
@@ -68,6 +69,8 @@ func writeResult(c *gin.Context, err error) {
 
 // Maps controller errors to HTTP status codes.
 func writeError(c *gin.Context, err error) {
+	_  = c.Error(err) // Attach the server error to the response
+
 	code := http.StatusInternalServerError
 	switch {
 	case errors.Is(err, core.ErrDatabaseNotFound):

@@ -2,8 +2,8 @@ package db_pod_manager
 
 import (
 	"burstkv/internal/controller/pod"
-	"burstkv/internal/controller/pod_resources.go"
 	"burstkv/internal/core"
+	"burstkv/internal/core/pod_resources.go"
 	"context"
 	"os"
 	"strings"
@@ -28,8 +28,14 @@ func NewPodManager() (*PodManager, error) {
 		return nil, err
 	}
 
+	metrics, err := newMetricsInterface()
+	if err != nil {
+		return nil, err
+	}
+
 	return &PodManager{
 		k8sInterface: k8s,
+		metricsInterface: metrics,
 		k8sNameSpace: k8sNamespace(),
 	}, nil
 }
@@ -50,7 +56,7 @@ func newK8sInterface() (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(cfg)
 }
 
-func newMetricsInterfacte() (metricsv.Interface, error) {
+func newMetricsInterface() (metricsv.Interface, error) {
 	cfg, err := k8sRestConfig()
 	if err != nil {
 		return nil, err
@@ -113,6 +119,10 @@ func (p *PodManager) PodMaxResources(ctx context.Context, podName string) (*pod_
 func (p *PodManager) PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
 	pm, err := p.metricsInterface.MetricsV1beta1().PodMetricses(p.k8sNameSpace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// log.Default().Printf("Warning: metrics for pod: %s, unavailable.\nThis may be because none yet exist (awaiting), or the pod couldn't not be found", podName)
+			return nil, nil
+		}
 		return nil, err
 	}
 	usage := pm.Containers[0].Usage

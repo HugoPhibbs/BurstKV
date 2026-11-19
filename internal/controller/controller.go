@@ -3,8 +3,9 @@ package controller
 import (
 	"burstkv/internal/controller/database"
 	"burstkv/internal/controller/pod"
-	"burstkv/internal/controller/pod_resources.go"
 	"burstkv/internal/core"
+	"burstkv/internal/core/database_status"
+	"burstkv/internal/core/pod_resources.go"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
 	"context"
@@ -377,13 +378,7 @@ func (c *Controller) StopAllWorkers() error {
 	return nil // Implement me
 }
 
-type DatabaseStatus struct {
-	Running          bool
-	MaxPodResources  *pod_resources.PodResources
-	UsedPodResources *pod_resources.PodResources
-}
-
-func (c *Controller) GetDatabaseStatus(ctx context.Context, databaseID string) (*DatabaseStatus, error) {
+func (c *Controller) GetDatabaseStatus(ctx context.Context, databaseID string) (*database_status.DatabaseStatus, error) {
 	db, exists := c.databases.Load(databaseID)
 
 	if !exists {
@@ -408,15 +403,16 @@ func (c *Controller) GetDatabaseStatus(ctx context.Context, databaseID string) (
 		}
 	}
 
-	return &DatabaseStatus{
+	return &database_status.DatabaseStatus{
 		Running:          running,
+		PodName:          db.Pod().Name(),
 		MaxPodResources:  maxResources,
 		UsedPodResources: usedResources,
 	}, nil
 }
 
-func (c *Controller) GetAllDatabaseStatuses(ctx context.Context) (map[string]*DatabaseStatus, error) {
-	res := make(map[string]*DatabaseStatus, c.databases.Size())
+func (c *Controller) GetAllDatabaseStatuses(ctx context.Context) (map[string]*database_status.DatabaseStatus, error) {
+	res := make(map[string]*database_status.DatabaseStatus, c.databases.Size())
 
 	for id := range c.databases.All() {
 		status, err := c.GetDatabaseStatus(ctx, id)

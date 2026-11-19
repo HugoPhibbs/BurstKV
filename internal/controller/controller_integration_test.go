@@ -5,7 +5,7 @@ import (
 	"burstkv/internal/controller/controller_grpc"
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/controller/pod_grpc_client_factory"
-	"burstkv/internal/controller/pod_resources.go"
+	"burstkv/internal/core/pod_resources.go"
 	"burstkv/internal/core"
 	snapshot_storage_test "burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
