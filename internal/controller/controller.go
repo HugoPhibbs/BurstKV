@@ -403,9 +403,14 @@ func (c *Controller) GetDatabaseStatus(ctx context.Context, databaseID string) (
 		}
 	}
 
+	var podName string = "N/A"
+	if running {
+		podName = db.Pod().Name()
+	}
+
 	return &database_status.DatabaseStatus{
 		Running:          running,
-		PodName:          db.Pod().Name(),
+		PodName:          podName,
 		MaxPodResources:  maxResources,
 		UsedPodResources: usedResources,
 	}, nil
