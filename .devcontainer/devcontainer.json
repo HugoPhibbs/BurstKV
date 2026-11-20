@@ -27,7 +27,14 @@
 		"vscode": {
 			"extensions": [
 				"DrBlury.protobuf-vsc",
-				"ms-azuretools.vscode-docker"
+				"ms-azuretools.vscode-docker",
+				"redhat.vscode-yaml",
+				"foxundermoon.shell-format",
+				"mishkinf.goto-next-previous-member",
+				"yzhang.markdown-all-in-one",
+				"bierner.markdown-preview-github-styles",
+				"christian-kohler.path-intellisense",
+				"ionutvmi.path-autocomplete"
 			]
 		}
 	}
