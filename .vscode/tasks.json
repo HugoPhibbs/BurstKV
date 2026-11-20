@@ -48,7 +48,19 @@
             "type": "shell",
             "command": "kubectl logs -f deploy/burstkv-controller",
             "problemMatcher": []
-        },       
+        },   
+        {
+            "label": "build cli",
+            "type": "shell",
+            "command": "go install ./cmd/bkv",
+            "problemMatcher": []
+        }, 
+        {
+            "label": "go tidy",
+            "type": "shell",
+            "command": "go mod tidy", 
+            "problemMatcher": "$go"
+        }
     ],
     "inputs": [
         {
