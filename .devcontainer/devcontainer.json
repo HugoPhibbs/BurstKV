@@ -27,7 +27,8 @@
 		"vscode": {
 			"extensions": [
 				"DrBlury.protobuf-vsc",
-				"ms-azuretools.vscode-docker"
+				"ms-azuretools.vscode-docker",
+				"redhat.vscode-yaml"
 			]
 		}
 	}
