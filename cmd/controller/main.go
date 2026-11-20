@@ -5,7 +5,6 @@ import (
 	"burstkv/internal/controller/controller_grpc"
 	"burstkv/internal/controller/pod_grpc_client_factory"
 	"burstkv/internal/controller/db_pod_manager"
-	"burstkv/internal/controller/server"
 	"burstkv/internal/core/redis_proxy"
 	"burstkv/internal/core/snapshot_storage"
 	"burstkv/internal/utils"
@@ -26,7 +25,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	serverPort := flag.Int("server-port", 6378, "Server port")
 	proxyPort := flag.Int("proxy-port", 6379, "Redis Proxy port")
 	grpcPodPort := flag.Int("grpc-port", 6380, "gRPC port for each pod")
 	controllerGRPCPort := flag.Int("controller-grpc-port", 6381, "gRPC port for the controller, used by pods")
@@ -58,16 +56,6 @@ func main() {
 		proxyAddr := utils.PortToLocalAddr(*proxyPort)
 		log.Default().Println("Redis proxy listening on " + proxyAddr)
 		if err := redis_proxy.NewRedisProxy(proxyAddr, newController).ListenAndServe(ctx); err != nil {
-			log.Println(err)
-			stop()
-		}
-	}()
-
-	go func() {
-		serverAddr := utils.PortToLocalAddr(*serverPort)
-		httpServer := server.New(newController)
-		log.Default().Println("Server listening on " + serverAddr)
-		if err := httpServer.Run(serverAddr); err != nil {
 			log.Println(err)
 			stop()
 		}

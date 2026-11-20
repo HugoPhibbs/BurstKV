@@ -43,6 +43,24 @@
             "command": "chmod +x ./scripts/dev_start.sh && ./scripts/dev_start.sh",
             "problemMatcher": []
         },
+        {
+            "label": "controller logs",
+            "type": "shell",
+            "command": "kubectl logs -f deploy/burstkv-controller",
+            "problemMatcher": []
+        },   
+        {
+            "label": "build cli",
+            "type": "shell",
+            "command": "go install ./cmd/bkv",
+            "problemMatcher": []
+        }, 
+        {
+            "label": "go tidy",
+            "type": "shell",
+            "command": "go mod tidy", 
+            "problemMatcher": "$go"
+        }
     ],
     "inputs": [
         {
@@ -50,6 +68,12 @@
             "type": "promptString",
             "description": "Image version",
             "default": "latest"
+        },
+        {
+            "id": "controllerAddr",
+            "type": "promptString",
+            "description": "Controller server address",
+            "default": "http://localhost:6378"
         }
     ]
 }

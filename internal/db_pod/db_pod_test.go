@@ -56,6 +56,55 @@ func (mc *MockControllerClient) RequestMigration(
 	return nil, nil // TODO
 }
 
+func (mc *MockControllerClient) GetDatabaseStatus(
+	ctx context.Context,
+	req *controller_pb.GetDatabaseStatusRequest,
+	opts ...grpc.CallOption) (*controller_pb.GetDatabaseStatusResponse, error) {
+	return &controller_pb.GetDatabaseStatusResponse{}, nil
+}
+
+func (mc *MockControllerClient) GetAllDatabaseStatus(
+	ctx context.Context,
+	req *emptypb.Empty,
+	opts ...grpc.CallOption) (*controller_pb.GetAllDatabaseStatusResponse, error) {
+	return &controller_pb.GetAllDatabaseStatusResponse{}, nil
+}
+
+func (mc *MockControllerClient) GetControllerStatus(
+	ctx context.Context,
+	req *emptypb.Empty,
+	opts ...grpc.CallOption) (*controller_pb.GetControllerStatusResponse, error) {
+	return &controller_pb.GetControllerStatusResponse{}, nil
+}
+
+func (mc *MockControllerClient) CreateDatabase(
+	ctx context.Context,
+	req *emptypb.Empty,
+	opts ...grpc.CallOption) (*controller_pb.CreateDatabaseResponse, error) {
+	return &controller_pb.CreateDatabaseResponse{}, nil
+}
+
+func (mc *MockControllerClient) PauseDatabase(
+	ctx context.Context,
+	req *controller_pb.PauseDatabaseRequest,
+	opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
+
+func (mc *MockControllerClient) ResumeDatabase(
+	ctx context.Context,
+	req *controller_pb.ResumeDatabaseRequest,
+	opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
+
+func (mc *MockControllerClient) DeleteDatabase(
+	ctx context.Context,
+	req *controller_pb.DeleteDatabaseRequest,
+	opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
+
 // fakeSnapshotStorage stands in for S3 presigned URLs: PUT stores the body, GET returns it (404 if empty).
 type fakeSnapshotStorage struct {
 	mu     sync.Mutex

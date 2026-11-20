@@ -4,6 +4,8 @@ import (
 	"burstkv/internal/controller/database"
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/core"
+	"burstkv/internal/core/database_status"
+	"burstkv/internal/core/pod_resources"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
 	"context"
@@ -22,6 +24,8 @@ const DB_PW_LENGTH = 16
 type PodManager interface {
 	ClaimWarmPod(ctx context.Context) (*pod.Pod, error)
 	DeletePod(ctx context.Context, podName string) error
+	PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error)
+	PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error)
 }
 
 type PodGRPCClientFactory interface {
@@ -63,26 +67,6 @@ func NewController(
 		snapShotstorage:    snapshotStorage,
 		proxyPort:          proxyPort,
 	}
-}
-
-// Returns the state of the database with the given ID.
-func (c *Controller) GetDatabaseState(databaseID string) (database.DatabaseStatus, error) {
-	foundDatabase, exists := c.databases.Load(databaseID)
-	if !exists {
-		return database.NotFound, nil
-	}
-
-	foundDatabase.Lock()
-	defer foundDatabase.Unlock()
-
-	if foundDatabase.IsDeleted() {
-		return database.NotFound, nil
-	}
-
-	if foundDatabase.IsRunning() {
-		return database.Running, nil
-	}
-	return database.Paused, nil
 }
 
 // Returns a list of all database IDs managed by this DBManager.
@@ -392,4 +376,57 @@ func (c *Controller) RecordDatabaseActivity(databaseID string) error {
 
 func (c *Controller) StopAllWorkers() error {
 	return nil // Implement me
+}
+
+func (c *Controller) GetDatabaseStatus(ctx context.Context, databaseID string) (*database_status.DatabaseStatus, error) {
+	db, exists := c.databases.Load(databaseID)
+
+	if !exists {
+		return nil, core.ErrDatabaseNotFound
+	}
+
+	running := db.IsRunning()
+	var maxResources *pod_resources.PodResources = nil
+	var usedResources *pod_resources.PodResources = nil
+
+	if running {
+		podName := db.Pod().Name()
+
+		var err error
+		maxResources, err = c.podManager.PodMaxResources(ctx, podName)
+		if err != nil {
+			return nil, err
+		}
+		usedResources, err = c.podManager.PodUsedResources(ctx, podName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var podName string = "N/A"
+	if running {
+		podName = db.Pod().Name()
+	}
+
+	return &database_status.DatabaseStatus{
+		Running:          running,
+		PodName:          podName,
+		MaxPodResources:  maxResources,
+		UsedPodResources: usedResources,
+	}, nil
+}
+
+func (c *Controller) GetAllDatabaseStatuses(ctx context.Context) (map[string]*database_status.DatabaseStatus, error) {
+	res := make(map[string]*database_status.DatabaseStatus, c.databases.Size())
+
+	for id := range c.databases.All() {
+		status, err := c.GetDatabaseStatus(ctx, id)
+
+		if err != nil {
+			return nil, err
+		}
+
+		res[id] = status
+	}
+	return res, nil
 }

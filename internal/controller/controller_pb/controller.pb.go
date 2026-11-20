@@ -154,6 +154,494 @@ func (x *GetSnapshotUploadURLResponse) GetUrl() string {
 	return ""
 }
 
+type GetDatabaseStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDatabaseStatusRequest) Reset() {
+	*x = GetDatabaseStatusRequest{}
+	mi := &file_proto_controller_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDatabaseStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDatabaseStatusRequest) ProtoMessage() {}
+
+func (x *GetDatabaseStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDatabaseStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetDatabaseStatusRequest) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetDatabaseStatusRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+type DatabaseStatus struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Running          bool                   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
+	PodName          string                 `protobuf:"bytes,2,opt,name=PodName,proto3" json:"PodName,omitempty"`
+	MaxPodResources  *PodResource           `protobuf:"bytes,3,opt,name=max_pod_resources,json=maxPodResources,proto3" json:"max_pod_resources,omitempty"`
+	UsedPodResources *PodResource           `protobuf:"bytes,4,opt,name=used_pod_resources,json=usedPodResources,proto3" json:"used_pod_resources,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *DatabaseStatus) Reset() {
+	*x = DatabaseStatus{}
+	mi := &file_proto_controller_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DatabaseStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DatabaseStatus) ProtoMessage() {}
+
+func (x *DatabaseStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DatabaseStatus.ProtoReflect.Descriptor instead.
+func (*DatabaseStatus) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DatabaseStatus) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *DatabaseStatus) GetPodName() string {
+	if x != nil {
+		return x.PodName
+	}
+	return ""
+}
+
+func (x *DatabaseStatus) GetMaxPodResources() *PodResource {
+	if x != nil {
+		return x.MaxPodResources
+	}
+	return nil
+}
+
+func (x *DatabaseStatus) GetUsedPodResources() *PodResource {
+	if x != nil {
+		return x.UsedPodResources
+	}
+	return nil
+}
+
+type GetDatabaseStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        *DatabaseStatus        `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDatabaseStatusResponse) Reset() {
+	*x = GetDatabaseStatusResponse{}
+	mi := &file_proto_controller_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDatabaseStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDatabaseStatusResponse) ProtoMessage() {}
+
+func (x *GetDatabaseStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDatabaseStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetDatabaseStatusResponse) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetDatabaseStatusResponse) GetStatus() *DatabaseStatus {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
+type GetAllDatabaseStatusResponse struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Statuses      map[string]*DatabaseStatus `protobuf:"bytes,1,rep,name=statuses,proto3" json:"statuses,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAllDatabaseStatusResponse) Reset() {
+	*x = GetAllDatabaseStatusResponse{}
+	mi := &file_proto_controller_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAllDatabaseStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAllDatabaseStatusResponse) ProtoMessage() {}
+
+func (x *GetAllDatabaseStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAllDatabaseStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetAllDatabaseStatusResponse) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetAllDatabaseStatusResponse) GetStatuses() map[string]*DatabaseStatus {
+	if x != nil {
+		return x.Statuses
+	}
+	return nil
+}
+
+type PodResource struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Memory        int64                  `protobuf:"varint,1,opt,name=memory,proto3" json:"memory,omitempty"`
+	Cpu           int64                  `protobuf:"varint,2,opt,name=cpu,proto3" json:"cpu,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PodResource) Reset() {
+	*x = PodResource{}
+	mi := &file_proto_controller_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PodResource) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PodResource) ProtoMessage() {}
+
+func (x *PodResource) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PodResource.ProtoReflect.Descriptor instead.
+func (*PodResource) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PodResource) GetMemory() int64 {
+	if x != nil {
+		return x.Memory
+	}
+	return 0
+}
+
+func (x *PodResource) GetCpu() int64 {
+	if x != nil {
+		return x.Cpu
+	}
+	return 0
+}
+
+type GetControllerStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PodsAvailable int64                  `protobuf:"varint,1,opt,name=pods_available,json=podsAvailable,proto3" json:"pods_available,omitempty"`
+	NDatabases    int64                  `protobuf:"varint,2,opt,name=n_databases,json=nDatabases,proto3" json:"n_databases,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetControllerStatusResponse) Reset() {
+	*x = GetControllerStatusResponse{}
+	mi := &file_proto_controller_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetControllerStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetControllerStatusResponse) ProtoMessage() {}
+
+func (x *GetControllerStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetControllerStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetControllerStatusResponse) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetControllerStatusResponse) GetPodsAvailable() int64 {
+	if x != nil {
+		return x.PodsAvailable
+	}
+	return 0
+}
+
+func (x *GetControllerStatusResponse) GetNDatabases() int64 {
+	if x != nil {
+		return x.NDatabases
+	}
+	return 0
+}
+
+type CreateDatabaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateDatabaseResponse) Reset() {
+	*x = CreateDatabaseResponse{}
+	mi := &file_proto_controller_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateDatabaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateDatabaseResponse) ProtoMessage() {}
+
+func (x *CreateDatabaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateDatabaseResponse.ProtoReflect.Descriptor instead.
+func (*CreateDatabaseResponse) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CreateDatabaseResponse) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+func (x *CreateDatabaseResponse) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+type PauseDatabaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseDatabaseRequest) Reset() {
+	*x = PauseDatabaseRequest{}
+	mi := &file_proto_controller_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseDatabaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseDatabaseRequest) ProtoMessage() {}
+
+func (x *PauseDatabaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseDatabaseRequest.ProtoReflect.Descriptor instead.
+func (*PauseDatabaseRequest) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *PauseDatabaseRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+type ResumeDatabaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeDatabaseRequest) Reset() {
+	*x = ResumeDatabaseRequest{}
+	mi := &file_proto_controller_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeDatabaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeDatabaseRequest) ProtoMessage() {}
+
+func (x *ResumeDatabaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeDatabaseRequest.ProtoReflect.Descriptor instead.
+func (*ResumeDatabaseRequest) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ResumeDatabaseRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+type DeleteDatabaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteDatabaseRequest) Reset() {
+	*x = DeleteDatabaseRequest{}
+	mi := &file_proto_controller_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteDatabaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteDatabaseRequest) ProtoMessage() {}
+
+func (x *DeleteDatabaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteDatabaseRequest.ProtoReflect.Descriptor instead.
+func (*DeleteDatabaseRequest) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DeleteDatabaseRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
 var File_proto_controller_proto protoreflect.FileDescriptor
 
 const file_proto_controller_proto_rawDesc = "" +
@@ -167,11 +655,53 @@ const file_proto_controller_proto_rawDesc = "" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
 	"databaseId\"0\n" +
 	"\x1cGetSnapshotUploadURLResponse\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url2\xc5\x01\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\";\n" +
+	"\x18GetDatabaseStatusRequest\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId\"\xd0\x01\n" +
+	"\x0eDatabaseStatus\x12\x18\n" +
+	"\arunning\x18\x01 \x01(\bR\arunning\x12\x18\n" +
+	"\aPodName\x18\x02 \x01(\tR\aPodName\x12C\n" +
+	"\x11max_pod_resources\x18\x03 \x01(\v2\x17.controller.PodResourceR\x0fmaxPodResources\x12E\n" +
+	"\x12used_pod_resources\x18\x04 \x01(\v2\x17.controller.PodResourceR\x10usedPodResources\"O\n" +
+	"\x19GetDatabaseStatusResponse\x122\n" +
+	"\x06status\x18\x01 \x01(\v2\x1a.controller.DatabaseStatusR\x06status\"\xcb\x01\n" +
+	"\x1cGetAllDatabaseStatusResponse\x12R\n" +
+	"\bstatuses\x18\x01 \x03(\v26.controller.GetAllDatabaseStatusResponse.StatusesEntryR\bstatuses\x1aW\n" +
+	"\rStatusesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.controller.DatabaseStatusR\x05value:\x028\x01\"7\n" +
+	"\vPodResource\x12\x16\n" +
+	"\x06memory\x18\x01 \x01(\x03R\x06memory\x12\x10\n" +
+	"\x03cpu\x18\x02 \x01(\x03R\x03cpu\"e\n" +
+	"\x1bGetControllerStatusResponse\x12%\n" +
+	"\x0epods_available\x18\x01 \x01(\x03R\rpodsAvailable\x12\x1f\n" +
+	"\vn_databases\x18\x02 \x01(\x03R\n" +
+	"nDatabases\"U\n" +
+	"\x16CreateDatabaseResponse\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\"7\n" +
+	"\x14PauseDatabaseRequest\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId\"8\n" +
+	"\x15ResumeDatabaseRequest\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId\"8\n" +
+	"\x15DeleteDatabaseRequest\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId2\x8c\x06\n" +
 	"\n" +
 	"Controller\x12f\n" +
 	"\x11GetSnapshotPutURL\x12'.controller.GetSnapshotUploadURLRequest\x1a(.controller.GetSnapshotUploadURLResponse\x12O\n" +
-	"\x10RequestMigration\x12#.controller.RequestMigrationRequest\x1a\x16.google.protobuf.EmptyB+Z)burstkv/internal/controller/controller_pbb\x06proto3"
+	"\x10RequestMigration\x12#.controller.RequestMigrationRequest\x1a\x16.google.protobuf.Empty\x12`\n" +
+	"\x11GetDatabaseStatus\x12$.controller.GetDatabaseStatusRequest\x1a%.controller.GetDatabaseStatusResponse\x12X\n" +
+	"\x14GetAllDatabaseStatus\x12\x16.google.protobuf.Empty\x1a(.controller.GetAllDatabaseStatusResponse\x12V\n" +
+	"\x13GetControllerStatus\x12\x16.google.protobuf.Empty\x1a'.controller.GetControllerStatusResponse\x12L\n" +
+	"\x0eCreateDatabase\x12\x16.google.protobuf.Empty\x1a\".controller.CreateDatabaseResponse\x12I\n" +
+	"\rPauseDatabase\x12 .controller.PauseDatabaseRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
+	"\x0eResumeDatabase\x12!.controller.ResumeDatabaseRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
+	"\x0eDeleteDatabase\x12!.controller.DeleteDatabaseRequest\x1a\x16.google.protobuf.EmptyB+Z)burstkv/internal/controller/controller_pbb\x06proto3"
 
 var (
 	file_proto_controller_proto_rawDescOnce sync.Once
@@ -185,23 +715,53 @@ func file_proto_controller_proto_rawDescGZIP() []byte {
 	return file_proto_controller_proto_rawDescData
 }
 
-var file_proto_controller_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_controller_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_proto_controller_proto_goTypes = []any{
 	(*GetSnapshotUploadURLRequest)(nil),  // 0: controller.GetSnapshotUploadURLRequest
 	(*RequestMigrationRequest)(nil),      // 1: controller.RequestMigrationRequest
 	(*GetSnapshotUploadURLResponse)(nil), // 2: controller.GetSnapshotUploadURLResponse
-	(*emptypb.Empty)(nil),                // 3: google.protobuf.Empty
+	(*GetDatabaseStatusRequest)(nil),     // 3: controller.GetDatabaseStatusRequest
+	(*DatabaseStatus)(nil),               // 4: controller.DatabaseStatus
+	(*GetDatabaseStatusResponse)(nil),    // 5: controller.GetDatabaseStatusResponse
+	(*GetAllDatabaseStatusResponse)(nil), // 6: controller.GetAllDatabaseStatusResponse
+	(*PodResource)(nil),                  // 7: controller.PodResource
+	(*GetControllerStatusResponse)(nil),  // 8: controller.GetControllerStatusResponse
+	(*CreateDatabaseResponse)(nil),       // 9: controller.CreateDatabaseResponse
+	(*PauseDatabaseRequest)(nil),         // 10: controller.PauseDatabaseRequest
+	(*ResumeDatabaseRequest)(nil),        // 11: controller.ResumeDatabaseRequest
+	(*DeleteDatabaseRequest)(nil),        // 12: controller.DeleteDatabaseRequest
+	nil,                                  // 13: controller.GetAllDatabaseStatusResponse.StatusesEntry
+	(*emptypb.Empty)(nil),                // 14: google.protobuf.Empty
 }
 var file_proto_controller_proto_depIdxs = []int32{
-	0, // 0: controller.Controller.GetSnapshotPutURL:input_type -> controller.GetSnapshotUploadURLRequest
-	1, // 1: controller.Controller.RequestMigration:input_type -> controller.RequestMigrationRequest
-	2, // 2: controller.Controller.GetSnapshotPutURL:output_type -> controller.GetSnapshotUploadURLResponse
-	3, // 3: controller.Controller.RequestMigration:output_type -> google.protobuf.Empty
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	7,  // 0: controller.DatabaseStatus.max_pod_resources:type_name -> controller.PodResource
+	7,  // 1: controller.DatabaseStatus.used_pod_resources:type_name -> controller.PodResource
+	4,  // 2: controller.GetDatabaseStatusResponse.status:type_name -> controller.DatabaseStatus
+	13, // 3: controller.GetAllDatabaseStatusResponse.statuses:type_name -> controller.GetAllDatabaseStatusResponse.StatusesEntry
+	4,  // 4: controller.GetAllDatabaseStatusResponse.StatusesEntry.value:type_name -> controller.DatabaseStatus
+	0,  // 5: controller.Controller.GetSnapshotPutURL:input_type -> controller.GetSnapshotUploadURLRequest
+	1,  // 6: controller.Controller.RequestMigration:input_type -> controller.RequestMigrationRequest
+	3,  // 7: controller.Controller.GetDatabaseStatus:input_type -> controller.GetDatabaseStatusRequest
+	14, // 8: controller.Controller.GetAllDatabaseStatus:input_type -> google.protobuf.Empty
+	14, // 9: controller.Controller.GetControllerStatus:input_type -> google.protobuf.Empty
+	14, // 10: controller.Controller.CreateDatabase:input_type -> google.protobuf.Empty
+	10, // 11: controller.Controller.PauseDatabase:input_type -> controller.PauseDatabaseRequest
+	11, // 12: controller.Controller.ResumeDatabase:input_type -> controller.ResumeDatabaseRequest
+	12, // 13: controller.Controller.DeleteDatabase:input_type -> controller.DeleteDatabaseRequest
+	2,  // 14: controller.Controller.GetSnapshotPutURL:output_type -> controller.GetSnapshotUploadURLResponse
+	14, // 15: controller.Controller.RequestMigration:output_type -> google.protobuf.Empty
+	5,  // 16: controller.Controller.GetDatabaseStatus:output_type -> controller.GetDatabaseStatusResponse
+	6,  // 17: controller.Controller.GetAllDatabaseStatus:output_type -> controller.GetAllDatabaseStatusResponse
+	8,  // 18: controller.Controller.GetControllerStatus:output_type -> controller.GetControllerStatusResponse
+	9,  // 19: controller.Controller.CreateDatabase:output_type -> controller.CreateDatabaseResponse
+	14, // 20: controller.Controller.PauseDatabase:output_type -> google.protobuf.Empty
+	14, // 21: controller.Controller.ResumeDatabase:output_type -> google.protobuf.Empty
+	14, // 22: controller.Controller.DeleteDatabase:output_type -> google.protobuf.Empty
+	14, // [14:23] is the sub-list for method output_type
+	5,  // [5:14] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_controller_proto_init() }
@@ -215,7 +775,7 @@ func file_proto_controller_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_controller_proto_rawDesc), len(file_proto_controller_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
