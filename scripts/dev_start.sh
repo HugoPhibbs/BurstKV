@@ -20,4 +20,4 @@ kubectl rollout status deploy/burstkv-controller --timeout=120s # Wait for the i
 kubectl get pods -l 'burstkv/role in (controller,warm)'
 kubectl logs deploy/burstkv-controller
 
-kubectl port-forward deploy/burstkv-controller 6378:6378 6379:6379
+kubectl port-forward deploy/burstkv-controller 6381:6381 6379:6379
