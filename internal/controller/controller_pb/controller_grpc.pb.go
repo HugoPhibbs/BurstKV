@@ -20,8 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Controller_GetSnapshotPutURL_FullMethodName = "/controller.Controller/GetSnapshotPutURL"
-	Controller_RequestMigration_FullMethodName  = "/controller.Controller/RequestMigration"
+	Controller_GetSnapshotPutURL_FullMethodName    = "/controller.Controller/GetSnapshotPutURL"
+	Controller_RequestMigration_FullMethodName     = "/controller.Controller/RequestMigration"
+	Controller_GetDatabaseStatus_FullMethodName    = "/controller.Controller/GetDatabaseStatus"
+	Controller_GetAllDatabaseStatus_FullMethodName = "/controller.Controller/GetAllDatabaseStatus"
+	Controller_GetControllerStatus_FullMethodName  = "/controller.Controller/GetControllerStatus"
+	Controller_CreateDatabase_FullMethodName       = "/controller.Controller/CreateDatabase"
+	Controller_PauseDatabase_FullMethodName        = "/controller.Controller/PauseDatabase"
+	Controller_ResumeDatabase_FullMethodName       = "/controller.Controller/ResumeDatabase"
+	Controller_DeleteDatabase_FullMethodName       = "/controller.Controller/DeleteDatabase"
 )
 
 // ControllerClient is the client API for Controller service.
@@ -30,6 +37,13 @@ const (
 type ControllerClient interface {
 	GetSnapshotPutURL(ctx context.Context, in *GetSnapshotUploadURLRequest, opts ...grpc.CallOption) (*GetSnapshotUploadURLResponse, error)
 	RequestMigration(ctx context.Context, in *RequestMigrationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	GetDatabaseStatus(ctx context.Context, in *GetDatabaseStatusRequest, opts ...grpc.CallOption) (*GetDatabaseStatusResponse, error)
+	GetAllDatabaseStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetAllDatabaseStatusResponse, error)
+	GetControllerStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetControllerStatusResponse, error)
+	CreateDatabase(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CreateDatabaseResponse, error)
+	PauseDatabase(ctx context.Context, in *PauseDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	ResumeDatabase(ctx context.Context, in *ResumeDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type controllerClient struct {
@@ -60,12 +74,89 @@ func (c *controllerClient) RequestMigration(ctx context.Context, in *RequestMigr
 	return out, nil
 }
 
+func (c *controllerClient) GetDatabaseStatus(ctx context.Context, in *GetDatabaseStatusRequest, opts ...grpc.CallOption) (*GetDatabaseStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDatabaseStatusResponse)
+	err := c.cc.Invoke(ctx, Controller_GetDatabaseStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerClient) GetAllDatabaseStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetAllDatabaseStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAllDatabaseStatusResponse)
+	err := c.cc.Invoke(ctx, Controller_GetAllDatabaseStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerClient) GetControllerStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetControllerStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetControllerStatusResponse)
+	err := c.cc.Invoke(ctx, Controller_GetControllerStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerClient) CreateDatabase(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CreateDatabaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateDatabaseResponse)
+	err := c.cc.Invoke(ctx, Controller_CreateDatabase_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerClient) PauseDatabase(ctx context.Context, in *PauseDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Controller_PauseDatabase_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerClient) ResumeDatabase(ctx context.Context, in *ResumeDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Controller_ResumeDatabase_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerClient) DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, Controller_DeleteDatabase_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControllerServer is the server API for Controller service.
 // All implementations must embed UnimplementedControllerServer
 // for forward compatibility.
 type ControllerServer interface {
 	GetSnapshotPutURL(context.Context, *GetSnapshotUploadURLRequest) (*GetSnapshotUploadURLResponse, error)
 	RequestMigration(context.Context, *RequestMigrationRequest) (*emptypb.Empty, error)
+	GetDatabaseStatus(context.Context, *GetDatabaseStatusRequest) (*GetDatabaseStatusResponse, error)
+	GetAllDatabaseStatus(context.Context, *emptypb.Empty) (*GetAllDatabaseStatusResponse, error)
+	GetControllerStatus(context.Context, *emptypb.Empty) (*GetControllerStatusResponse, error)
+	CreateDatabase(context.Context, *emptypb.Empty) (*CreateDatabaseResponse, error)
+	PauseDatabase(context.Context, *PauseDatabaseRequest) (*emptypb.Empty, error)
+	ResumeDatabase(context.Context, *ResumeDatabaseRequest) (*emptypb.Empty, error)
+	DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedControllerServer()
 }
 
@@ -81,6 +172,27 @@ func (UnimplementedControllerServer) GetSnapshotPutURL(context.Context, *GetSnap
 }
 func (UnimplementedControllerServer) RequestMigration(context.Context, *RequestMigrationRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestMigration not implemented")
+}
+func (UnimplementedControllerServer) GetDatabaseStatus(context.Context, *GetDatabaseStatusRequest) (*GetDatabaseStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDatabaseStatus not implemented")
+}
+func (UnimplementedControllerServer) GetAllDatabaseStatus(context.Context, *emptypb.Empty) (*GetAllDatabaseStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAllDatabaseStatus not implemented")
+}
+func (UnimplementedControllerServer) GetControllerStatus(context.Context, *emptypb.Empty) (*GetControllerStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetControllerStatus not implemented")
+}
+func (UnimplementedControllerServer) CreateDatabase(context.Context, *emptypb.Empty) (*CreateDatabaseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDatabase not implemented")
+}
+func (UnimplementedControllerServer) PauseDatabase(context.Context, *PauseDatabaseRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseDatabase not implemented")
+}
+func (UnimplementedControllerServer) ResumeDatabase(context.Context, *ResumeDatabaseRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeDatabase not implemented")
+}
+func (UnimplementedControllerServer) DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteDatabase not implemented")
 }
 func (UnimplementedControllerServer) mustEmbedUnimplementedControllerServer() {}
 func (UnimplementedControllerServer) testEmbeddedByValue()                    {}
@@ -139,6 +251,132 @@ func _Controller_RequestMigration_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Controller_GetDatabaseStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDatabaseStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).GetDatabaseStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_GetDatabaseStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).GetDatabaseStatus(ctx, req.(*GetDatabaseStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Controller_GetAllDatabaseStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).GetAllDatabaseStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_GetAllDatabaseStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).GetAllDatabaseStatus(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Controller_GetControllerStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).GetControllerStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_GetControllerStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).GetControllerStatus(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Controller_CreateDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).CreateDatabase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_CreateDatabase_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).CreateDatabase(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Controller_PauseDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseDatabaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).PauseDatabase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_PauseDatabase_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).PauseDatabase(ctx, req.(*PauseDatabaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Controller_ResumeDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeDatabaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).ResumeDatabase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_ResumeDatabase_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).ResumeDatabase(ctx, req.(*ResumeDatabaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Controller_DeleteDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteDatabaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).DeleteDatabase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_DeleteDatabase_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).DeleteDatabase(ctx, req.(*DeleteDatabaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Controller_ServiceDesc is the grpc.ServiceDesc for Controller service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -153,6 +391,34 @@ var Controller_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestMigration",
 			Handler:    _Controller_RequestMigration_Handler,
+		},
+		{
+			MethodName: "GetDatabaseStatus",
+			Handler:    _Controller_GetDatabaseStatus_Handler,
+		},
+		{
+			MethodName: "GetAllDatabaseStatus",
+			Handler:    _Controller_GetAllDatabaseStatus_Handler,
+		},
+		{
+			MethodName: "GetControllerStatus",
+			Handler:    _Controller_GetControllerStatus_Handler,
+		},
+		{
+			MethodName: "CreateDatabase",
+			Handler:    _Controller_CreateDatabase_Handler,
+		},
+		{
+			MethodName: "PauseDatabase",
+			Handler:    _Controller_PauseDatabase_Handler,
+		},
+		{
+			MethodName: "ResumeDatabase",
+			Handler:    _Controller_ResumeDatabase_Handler,
+		},
+		{
+			MethodName: "DeleteDatabase",
+			Handler:    _Controller_DeleteDatabase_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

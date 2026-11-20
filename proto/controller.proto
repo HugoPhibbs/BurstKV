@@ -4,14 +4,59 @@ package controller;
 
 option go_package = "burstkv/internal/controller/controller_pb";
 
-
 import "google/protobuf/empty.proto";
 service Controller {
   rpc GetSnapshotPutURL(GetSnapshotUploadURLRequest) returns (GetSnapshotUploadURLResponse);
   rpc RequestMigration(RequestMigrationRequest) returns (google.protobuf.Empty);
+  rpc GetDatabaseStatus(GetDatabaseStatusRequest) returns (GetDatabaseStatusResponse);
+  rpc GetAllDatabaseStatus(google.protobuf.Empty) returns (GetAllDatabaseStatusResponse);
+  rpc GetControllerStatus(google.protobuf.Empty) returns (GetControllerStatusResponse);
+  rpc CreateDatabase(google.protobuf.Empty) returns (CreateDatabaseResponse);
+  rpc PauseDatabase(PauseDatabaseRequest) returns (google.protobuf.Empty);
+  rpc ResumeDatabase(ResumeDatabaseRequest) returns (google.protobuf.Empty);
+  rpc DeleteDatabase(DeleteDatabaseRequest) returns (google.protobuf.Empty);
 }
+
 message GetSnapshotUploadURLRequest  { string database_id = 1; }
 
 message RequestMigrationRequest {string database_id = 1;}
 
 message GetSnapshotUploadURLResponse { string url = 1; }
+
+message GetDatabaseStatusRequest {string database_id = 1;}
+
+message DatabaseStatus {
+  bool        running            = 1;
+  string      PodName            = 2;
+  PodResource max_pod_resources  = 3;
+  PodResource used_pod_resources = 4;
+}
+
+message GetDatabaseStatusResponse {
+  DatabaseStatus status = 1;
+}
+
+message GetAllDatabaseStatusResponse {
+  map<string, DatabaseStatus> statuses = 1;
+}
+
+message PodResource {
+  int64 memory = 1;
+  int64 cpu    = 2;
+}
+
+message GetControllerStatusResponse {
+  int64 pods_available = 1;
+  int64 n_databases    = 2;
+}
+
+message CreateDatabaseResponse {
+  string database_id = 1;
+  string password    = 2;
+}
+
+message PauseDatabaseRequest  { string database_id = 1; }
+
+message ResumeDatabaseRequest { string database_id = 1; }
+
+message DeleteDatabaseRequest { string database_id = 1; }
