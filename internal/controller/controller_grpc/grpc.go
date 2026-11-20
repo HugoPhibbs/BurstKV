@@ -39,7 +39,7 @@ func (s *ControllerGRPCServer) ListenAndServe(addr string) error {
 func (s *ControllerGRPCServer) GetDatabaseStatus(ctx context.Context, req *pb.GetDatabaseStatusRequest) (*pb.GetDatabaseStatusResponse, error) {
 	status, err := s.controller.GetDatabaseStatus(ctx, req.GetDatabaseId())
 	if err != nil {
-		return nil, err
+		return nil, toRPCStatusError(err)
 	}
 
 	return &pb.GetDatabaseStatusResponse{
@@ -50,7 +50,7 @@ func (s *ControllerGRPCServer) GetDatabaseStatus(ctx context.Context, req *pb.Ge
 func (s *ControllerGRPCServer) GetAllDatabaseStatus(ctx context.Context, _ *emptypb.Empty) (*pb.GetAllDatabaseStatusResponse, error) {
 	statuses, err := s.controller.GetAllDatabaseStatuses(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, toRPCStatusError(err)
 	}
 
 	resp := &pb.GetAllDatabaseStatusResponse{
@@ -110,35 +110,35 @@ func (s *ControllerGRPCServer) RequestMigration(ctx context.Context, req *pb.Req
 func (s *ControllerGRPCServer) CreateDatabase(ctx context.Context, _ *emptypb.Empty) (*pb.CreateDatabaseResponse, error) {
 	id, password, err := s.controller.CreateDatabase(ctx)
 	if err != nil {
-		return nil, toStatusError(err)
+		return nil, toRPCStatusError(err)
 	}
 	return &pb.CreateDatabaseResponse{DatabaseId: id, Password: password}, nil
 }
 
 func (s *ControllerGRPCServer) PauseDatabase(ctx context.Context, req *pb.PauseDatabaseRequest) (*emptypb.Empty, error) {
 	if err := s.controller.PauseDatabase(ctx, req.GetDatabaseId()); err != nil {
-		return nil, toStatusError(err)
+		return nil, toRPCStatusError(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
 func (s *ControllerGRPCServer) ResumeDatabase(ctx context.Context, req *pb.ResumeDatabaseRequest) (*emptypb.Empty, error) {
 	if err := s.controller.ResumeDatabase(ctx, req.GetDatabaseId()); err != nil {
-		return nil, toStatusError(err)
+		return nil, toRPCStatusError(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
 func (s *ControllerGRPCServer) DeleteDatabase(ctx context.Context, req *pb.DeleteDatabaseRequest) (*emptypb.Empty, error) {
 	if err := s.controller.DeleteDatabase(ctx, req.GetDatabaseId()); err != nil {
-		return nil, toStatusError(err)
+		return nil, toRPCStatusError(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
-// toStatusError maps controller errors to gRPC status codes, so clients can
+// toRPCStatusError maps controller errors to gRPC status codes, so clients can
 // tell "not found" apart from "something broke" without parsing the message.
-func toStatusError(err error) error {
+func toRPCStatusError(err error) error {
 	code := codes.Internal
 	switch {
 	case errors.Is(err, core.ErrDatabaseNotFound):
