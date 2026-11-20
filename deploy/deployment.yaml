@@ -20,6 +20,10 @@ spec:
         ports:
         - { name: redis, containerPort: 6379 }
         - { name: grpc, containerPort: 6381 }
+        args:
+        - --storage-address=host.minikube.internal:9000
+        - --access-key=default-ak
+        - --secret-key=default-sk
 
 ---
 apiVersion: v1
