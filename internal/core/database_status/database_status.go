@@ -1,6 +1,6 @@
 package database_status
 
-import "burstkv/internal/core/pod_resources.go"
+import "burstkv/internal/core/pod_resources"
 
 type DatabaseStatus struct {
 	Running          bool

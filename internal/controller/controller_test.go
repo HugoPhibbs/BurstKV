@@ -2,7 +2,7 @@ package controller
 
 import (
 	"burstkv/internal/controller/pod"
-	"burstkv/internal/core/pod_resources.go"
+	"burstkv/internal/core/pod_resources"
 	"burstkv/internal/core"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"context"

@@ -5,7 +5,7 @@ import (
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/core"
 	"burstkv/internal/core/database_status"
-	"burstkv/internal/core/pod_resources.go"
+	"burstkv/internal/core/pod_resources"
 	"burstkv/internal/db_pod/db_pod_pb"
 	"burstkv/internal/utils"
 	"context"
