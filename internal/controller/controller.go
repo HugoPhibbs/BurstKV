@@ -88,7 +88,7 @@ func (c *Controller) GetConfig(ctx context.Context) (*ControllerConfig, error) {
 }
 
 type ControllerStatus struct {
-	NumDatabases int
+	NumDatabases     int
 	NumPodsAvailable int
 }
 
@@ -98,9 +98,9 @@ func (c *Controller) GetStatus(ctx context.Context) (*ControllerStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &ControllerStatus{
-		NumDatabases: c.databases.Size(),
+		NumDatabases:     c.databases.Size(),
 		NumPodsAvailable: nPods,
 	}, nil
 }
@@ -465,4 +465,14 @@ func (c *Controller) GetAllDatabaseStatuses(ctx context.Context) (map[string]*da
 		res[id] = status
 	}
 	return res, nil
+}
+
+func (c *Controller) GetDatabaseAuthToken(ctx context.Context, databaseID string) (string, error) {
+	foundDB, exists := c.databases.Load(databaseID)
+
+	if !exists {
+		return "", core.ErrDatabaseNotFound
+	}
+
+	return fmt.Sprintf("%s_%s", foundDB.ID(), foundDB.Password()), nil
 }
