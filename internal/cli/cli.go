@@ -284,7 +284,7 @@ func printStatuses(cmd *cobra.Command, statuses map[string]*controller_pb.Databa
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 3, ' ', 0)
 	defer w.Flush()
 
-	fmt.Fprintln(w, "DATABASE ID\tRUNNING\tMEM (MB)\tCPU (mCPU)")
+	fmt.Fprintln(w, "DATABASE ID\tRUNNING\tPODNAME\tMEM (MB)\tCPU (mCPU)")
 	for _, id := range slices.Sorted(maps.Keys(statuses)) {
 		s := statuses[id]
 		used, max := s.GetUsedPodResources(), s.GetMaxPodResources()
@@ -297,9 +297,10 @@ func printStatuses(cmd *cobra.Command, statuses map[string]*controller_pb.Databa
 			cpu = formatPodResource(used.GetCpu(), max.GetCpu())
 		}
 
-		fmt.Fprintf(w, "%s\t%t\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%t\t%s\t%s\t%s\n",
 			id,
 			s.GetRunning(),
+			s.GetPodName(),
 			mem,
 			cpu,
 		)

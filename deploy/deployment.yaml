@@ -85,7 +85,7 @@ roleRef:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: burstkv-warm
+  name: burstkv-db-pod
 spec:
   replicas: 10
   selector:
