@@ -129,6 +129,33 @@ func (s *ControllerGRPCServer) ResumeDatabase(ctx context.Context, req *pb.Resum
 	return &emptypb.Empty{}, nil
 }
 
+func (s *ControllerGRPCServer) GetControllerConfig(ctx context.Context, _ *emptypb.Empty) (*pb.GetControllerConfigResponse, error) {
+	config, err := s.controller.GetConfig(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetControllerConfigResponse{
+		ProxyPort:  int64(config.ProxyPort),
+		StorageUrl: config.StorageURL,
+		IdleLimit:  int64(config.IdleLimit),
+	}, nil
+}
+
+func (s *ControllerGRPCServer) GetControllerStatus(ctx context.Context, _ *emptypb.Empty) (*pb.GetControllerStatusResponse, error) {
+	status, err := s.controller.GetStatus(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetControllerStatusResponse{
+		NumDatabases:     int64(status.NumDatabases),
+		NumPodsAvailable: int64(status.NumPodsAvailable),
+	}, nil
+}
+
 func (s *ControllerGRPCServer) DeleteDatabase(ctx context.Context, req *pb.DeleteDatabaseRequest) (*emptypb.Empty, error) {
 	if err := s.controller.DeleteDatabase(ctx, req.GetDatabaseId()); err != nil {
 		return nil, toRPCStatusError(err)

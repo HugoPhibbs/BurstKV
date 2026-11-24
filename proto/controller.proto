@@ -15,6 +15,12 @@ service Controller {
   rpc PauseDatabase(PauseDatabaseRequest) returns (google.protobuf.Empty);
   rpc ResumeDatabase(ResumeDatabaseRequest) returns (google.protobuf.Empty);
   rpc DeleteDatabase(DeleteDatabaseRequest) returns (google.protobuf.Empty);
+  rpc GetControllerConfig(google.protobuf.Empty) returns (GetControllerConfigResponse);
+}
+message GetControllerConfigResponse {
+  int64 proxy_port = 1;
+  int64 idle_limit = 2;
+  string storage_url = 3;
 }
 
 message GetSnapshotUploadURLRequest  { string database_id = 1; }
@@ -46,8 +52,8 @@ message PodResource {
 }
 
 message GetControllerStatusResponse {
-  int64 pods_available = 1;
-  int64 n_databases    = 2;
+  int64 num_pods_available = 1;
+  int64 num_databases    = 2;
 }
 
 message CreateDatabaseResponse {

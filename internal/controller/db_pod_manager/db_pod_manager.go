@@ -34,9 +34,9 @@ func NewPodManager() (*PodManager, error) {
 	}
 
 	return &PodManager{
-		k8sInterface: k8s,
+		k8sInterface:     k8s,
 		metricsInterface: metrics,
-		k8sNameSpace: k8sNamespace(),
+		k8sNameSpace:     k8sNamespace(),
 	}, nil
 }
 
@@ -103,6 +103,17 @@ func (p *PodManager) DeletePod(ctx context.Context, podName string) error {
 		return core.ErrPodNotFound
 	}
 	return err
+}
+
+func (p *PodManager) NumberOfWarmPods(ctx context.Context) (int, error) {
+	pods, err := p.k8sInterface.CoreV1().Pods(p.k8sNameSpace).List(ctx, metav1.ListOptions{
+		LabelSelector: "burstkv/role=warm",
+		FieldSelector: "status.phase=Running",
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(pods.Items), nil
 }
 
 func (p *PodManager) PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
