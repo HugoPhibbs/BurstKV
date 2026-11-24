@@ -24,6 +24,7 @@ const DB_PW_LENGTH = 16
 type PodManager interface {
 	ClaimWarmPod(ctx context.Context) (*pod.Pod, error)
 	DeletePod(ctx context.Context, podName string) error
+	NumberOfWarmPods(ctx context.Context) (int, error)
 	PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error)
 	PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error)
 }
@@ -35,6 +36,7 @@ type PodGRPCClientFactory interface {
 const SNAPSHOT_UPLOAD_URL_EXPIRY = 5 * time.Minute
 
 type SnapshotStorage interface {
+	StorageURL() string
 	DeleteSnapshot(ctx context.Context, databaseID string) error
 	PresignedPutURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error)
 	PresignedGetURL(ctx context.Context, databaseID string, expiry time.Duration) (string, error)
@@ -67,6 +69,40 @@ func NewController(
 		snapShotstorage:    snapshotStorage,
 		proxyPort:          proxyPort,
 	}
+}
+
+type ControllerConfig struct {
+	StorageURL string
+	ProxyPort  int
+	IdleLimit  int // In seconds
+}
+
+func (c *Controller) GetConfig(ctx context.Context) (*ControllerConfig, error) {
+
+	return &ControllerConfig{
+		StorageURL: c.snapShotstorage.StorageURL(),
+		ProxyPort:  c.proxyPort,
+		IdleLimit:  int(c.idleLimit.Seconds()),
+	}, nil
+
+}
+
+type ControllerStatus struct {
+	NumDatabases int
+	NumPodsAvailable int
+}
+
+func (c *Controller) GetStatus(ctx context.Context) (*ControllerStatus, error) {
+	nPods, err := c.podManager.NumberOfWarmPods(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	
+	return &ControllerStatus{
+		NumDatabases: c.databases.Size(),
+		NumPodsAvailable: nPods,
+	}, nil
 }
 
 // Returns a list of all database IDs managed by this DBManager.

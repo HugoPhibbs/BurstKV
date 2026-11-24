@@ -67,12 +67,39 @@ func (c *cli) rootCmd() *cobra.Command {
 	root.AddCommand(
 		c.createCmd(),
 		c.statusCmd(),
+		c.dbStatusCmd(),
 		c.pauseCmd(),
 		c.deleteCmd(),
 		c.resumeCmd(),
+		c.configCmd(),
 	)
 
 	return root
+}
+
+func (c *cli) configCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "config",
+		Short: "Get the internal configuration of the controller",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
+			defer cancel()
+
+			config, err := c.client.GetControllerConfig(ctx, &emptypb.Empty{})
+
+			if err != nil {
+				fmt.Println(err)
+				return nil
+			}
+
+			fmt.Printf("Redis Port: %d\n", config.ProxyPort)
+			fmt.Printf("Idle limit (s): %d\n", config.IdleLimit)
+			fmt.Printf("Storage URL: %s\n", config.StorageUrl)
+			
+			return nil
+		},
+	}
 }
 
 func (c *cli) pauseCmd() *cobra.Command {
@@ -135,10 +162,32 @@ func (c *cli) deleteCmd() *cobra.Command {
 	}
 }
 
-func (c *cli) statusCmd() *cobra.Command {
+func (c * cli) statusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status + <id>",
-		Short: "Find all database statuses, or just one specified by the id",
+		Use:   "status",
+		Short: "Print the status of the controlle",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
+			defer cancel()
+
+			resp, err := c.client.GetControllerStatus(ctx, &emptypb.Empty{})
+			if err != nil {
+				fmt.Println(err)
+				return nil
+			}
+
+			fmt.Printf("Number of pods available: %d\n", resp.NumPodsAvailable)
+			fmt.Printf("Number of databases: %d\n", resp.NumDatabases)
+			return nil
+		},
+	}
+}
+
+func (c *cli) dbStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "db-status + <id>",
+		Short: "Print the status of all databases or just one specified by the id",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
@@ -147,14 +196,14 @@ func (c *cli) statusCmd() *cobra.Command {
 			var statusResponses map[string]*controller_pb.DatabaseStatus // ID -> status
 
 			if len(args) == 0 {
-				resp, err := c.client.GetAllDatabaseStatus(ctx, &emptypb.Empty{})
+				databasesResp, err := c.client.GetAllDatabaseStatus(ctx, &emptypb.Empty{})
 
 				if err != nil {
 					fmt.Println(err)
 					return nil
 				}
 
-				statusResponses = resp.GetStatuses()
+				statusResponses = databasesResp.GetStatuses()
 
 			} else {
 				databaseID := args[0]

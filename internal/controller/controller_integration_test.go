@@ -5,8 +5,8 @@ import (
 	"burstkv/internal/controller/controller_grpc"
 	"burstkv/internal/controller/pod"
 	"burstkv/internal/controller/pod_grpc_client_factory"
-	"burstkv/internal/core/pod_resources"
 	"burstkv/internal/core"
+	"burstkv/internal/core/pod_resources"
 	snapshot_storage_test "burstkv/internal/core/snapshot_storage/snapshot_storage_test"
 	"burstkv/internal/utils"
 	"context"
@@ -27,13 +27,13 @@ import (
 const dbImageName = "burstkv-db:test"
 
 // A PodManager backed by real docker containers instead of Kubernetes.
-type dockerPodManager struct {
+type fakePodManager struct {
 	mu      sync.Mutex
 	pods    []*pod.Pod
 	claimed map[string]bool // podName -> claimed
 }
 
-func (pm *dockerPodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
+func (pm *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	for _, p := range pm.pods {
@@ -45,16 +45,25 @@ func (pm *dockerPodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) 
 	return nil, core.ErrNoAvailablePods
 }
 
-func (pm *dockerPodManager) DeletePod(ctx context.Context, podName string) error {
+func (pm *fakePodManager) DeletePod(ctx context.Context, podName string) error {
 	return nil
 }
 
+func (pm *fakePodManager) NumberOfWarmPods(ctx context.Context) (int, error) {
+	n := 0
+	for _, p := range pm.pods {
+		if !pm.claimed[p.Name()] {
+			n++
+		}
+	}
+	return n, nil
+}
 
-func (pm *dockerPodManager) PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
+func (pm *fakePodManager) PodUsedResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
 	return nil, nil // TODO
 }
 
-func (pm *dockerPodManager) PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
+func (pm *fakePodManager) PodMaxResources(ctx context.Context, podName string) (*pod_resources.PodResources, error) {
 	return nil, nil // TODO
 }
 
@@ -82,9 +91,9 @@ func buildDBPodImage() error {
 	return nil
 }
 
-func newDockerPodManager(t *testing.T, numPods int, controllerGRPCAddress string) *dockerPodManager {
+func newDockerPodManager(t *testing.T, numPods int, controllerGRPCAddress string) *fakePodManager {
 	t.Helper()
-	pm := &dockerPodManager{claimed: map[string]bool{}}
+	pm := &fakePodManager{claimed: map[string]bool{}}
 
 	env := map[string]string{
 		"GRPC_PORT":               "6380",

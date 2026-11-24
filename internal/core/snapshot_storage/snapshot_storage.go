@@ -34,6 +34,10 @@ func NewSnapshotStorage(storageURL string, bucketName string, minioCreds *creden
 	}
 }
 
+func (s *SnapshotStorage) StorageURL() string {
+	return s.storageURL
+}
+
 func (s *SnapshotStorage) MinioClient() *minio.Client {
 	return s.minioClient
 }

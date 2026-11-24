@@ -22,6 +22,10 @@ type fakePodManager struct {
 	deleted   int
 }
 
+func (m *fakePodManager) NumberOfWarmPods(ctx context.Context) (int, error) {
+	return m.available, nil
+}
+
 func (m *fakePodManager) ClaimWarmPod(ctx context.Context) (*pod.Pod, error) {
 	if m.claimed >= m.available {
 		return nil, core.ErrNoAvailablePods
@@ -51,6 +55,10 @@ func (m *fakePodManager) PodMaxResources(ctx context.Context, podName string) (*
 
 type fakeSnapshotStorage struct {
 	deleted []string
+}
+
+func (s *fakeSnapshotStorage) StorageURL() string {
+	return ""
 }
 
 func (s *fakeSnapshotStorage) DeleteSnapshot(ctx context.Context, databaseID string) error {

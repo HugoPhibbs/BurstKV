@@ -105,6 +105,14 @@ func (mc *MockControllerClient) DeleteDatabase(
 	return &emptypb.Empty{}, nil
 }
 
+
+func (mc *MockControllerClient) GetControllerConfig(
+	ctx context.Context,
+	req *emptypb.Empty,
+	opts ...grpc.CallOption) (*controller_pb.GetControllerConfigResponse, error) {
+	return &controller_pb.GetControllerConfigResponse{}, nil
+}
+
 // fakeSnapshotStorage stands in for S3 presigned URLs: PUT stores the body, GET returns it (404 if empty).
 type fakeSnapshotStorage struct {
 	mu     sync.Mutex
