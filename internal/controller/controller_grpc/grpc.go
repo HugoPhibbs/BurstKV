@@ -36,6 +36,18 @@ func (s *ControllerGRPCServer) ListenAndServe(addr string) error {
 	return grpcServer.Serve(lis)
 }
 
+func (s *ControllerGRPCServer) GetDatabaseAuthToken(ctx context.Context, req *pb.GetDatabaseAuthTokenRequest) (*pb.GetDatabaseAuthTokenResponse, error) {
+	token, err := s.controller.GetDatabaseAuthToken(ctx, req.GetDatabaseId())
+
+	if err != nil {
+		return nil, toRPCStatusError(err)
+	}
+
+	return &pb.GetDatabaseAuthTokenResponse{
+		Token: token,
+	}, nil
+}
+
 func (s *ControllerGRPCServer) GetDatabaseStatus(ctx context.Context, req *pb.GetDatabaseStatusRequest) (*pb.GetDatabaseStatusResponse, error) {
 	status, err := s.controller.GetDatabaseStatus(ctx, req.GetDatabaseId())
 	if err != nil {
