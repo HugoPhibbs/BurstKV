@@ -113,6 +113,13 @@ func (mc *MockControllerClient) GetControllerConfig(
 	return &controller_pb.GetControllerConfigResponse{}, nil
 }
 
+func (mc *MockControllerClient) GetDatabaseAuthToken(
+	ctx context.Context,
+	req *controller_pb.GetDatabaseAuthTokenRequest,
+	opts ...grpc.CallOption) (*controller_pb.GetDatabaseAuthTokenResponse, error) {
+	return &controller_pb.GetDatabaseAuthTokenResponse{}, nil
+}
+
 // fakeSnapshotStorage stands in for S3 presigned URLs: PUT stores the body, GET returns it (404 if empty).
 type fakeSnapshotStorage struct {
 	mu     sync.Mutex
