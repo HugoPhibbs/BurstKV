@@ -34,7 +34,7 @@ func readSnapshot(getURL string) (string, error) {
 
 func TestSnapshotStorage_TestSnapshotLifecycle(t *testing.T) {
 	ctx := t.Context()
-	snapshotStorage := CreateNewTestServer(t, 9000)
+	snapshotStorage := CreateNewTestServer(t, 9001)
 
 	testDBID := "test-db"
 	expiry := 30 * time.Second
