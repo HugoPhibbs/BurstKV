@@ -16,6 +16,7 @@ service Controller {
   rpc ResumeDatabase(ResumeDatabaseRequest) returns (google.protobuf.Empty);
   rpc DeleteDatabase(DeleteDatabaseRequest) returns (google.protobuf.Empty);
   rpc GetControllerConfig(google.protobuf.Empty) returns (GetControllerConfigResponse);
+  rpc GetDatabaseAuthToken(GetDatabaseAuthTokenRequest) returns (GetDatabaseAuthTokenResponse);
 }
 message GetControllerConfigResponse {
   int64 proxy_port = 1;
@@ -54,6 +55,14 @@ message PodResource {
 message GetControllerStatusResponse {
   int64 num_pods_available = 1;
   int64 num_databases    = 2;
+}
+
+message GetDatabaseAuthTokenRequest {
+  string database_id = 1;
+}
+
+message GetDatabaseAuthTokenResponse {
+  string token = 1;
 }
 
 message CreateDatabaseResponse {

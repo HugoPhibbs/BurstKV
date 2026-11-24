@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"slices"
 	"text/tabwriter"
@@ -39,6 +41,7 @@ func (c *cli) onClose() {
 
 type cli struct {
 	addr       string
+	proxyAddr  string
 	client     controller_pb.ControllerClient
 	clientConn *grpc.ClientConn
 }
@@ -51,6 +54,11 @@ func (c *cli) rootCmd() *cobra.Command {
 			if c.addr == "" {
 				return errors.New("controller address not set, use --addr or the BKV_ADDR env var")
 			}
+
+			if c.proxyAddr == "" {
+				return errors.New("controller redis proxy address not set, use --proxy-addr or the BKV_PROXY_ADDR env var")
+			}
+
 			conn, err := grpc.NewClient(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				return err
@@ -64,25 +72,75 @@ func (c *cli) rootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&c.addr, "addr", os.Getenv("BKV_ADDR"),
 		"controller address, defaults to the BKV_ADDR env var")
 
-	root.AddCommand(
+	root.PersistentFlags().StringVar(&c.proxyAddr, "proxy-addr", os.Getenv("BKV_PROXY_ADDR"),
+		"Controller Redis Proxy address, defaults to the BKV_PROXY_ADDR env var")
+
+	dbCmd := &cobra.Command{
+		Use:   "db",
+		Short: "Manage databases",
+	}
+
+	dbCmd.AddCommand(
 		c.createCmd(),
-		c.statusCmd(),
 		c.dbStatusCmd(),
 		c.pauseCmd(),
 		c.deleteCmd(),
 		c.resumeCmd(),
+		c.connectCmd(),
+	)
+
+	root.AddCommand(
+		c.statusCmd(),
 		c.configCmd(),
+		dbCmd,
 	)
 
 	return root
 }
 
+func (c *cli) connectCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "connect + <id>",
+		Short: "Connect to a database with the Redis CLI using the given ID",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
+			defer cancel()
+
+			databaseID := args[0]
+			resp, err := c.client.GetDatabaseAuthToken(ctx, &controller_pb.GetDatabaseAuthTokenRequest{DatabaseId: databaseID})
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			proxyHost, port, err := net.SplitHostPort(c.proxyAddr)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			redisCmd := exec.Command("redis-cli", "-h", proxyHost, "-p", port, "-a", resp.GetToken(), "--no-auth-warning")
+
+			redisCmd.Stdin = os.Stdin
+			redisCmd.Stdout = os.Stdout
+			redisCmd.Stderr = os.Stderr
+
+			if err := redisCmd.Run(); err != nil {
+				fmt.Println(err)
+			}
+		},
+	}
+}
+
 func (c *cli) configCmd() *cobra.Command {
 	return &cobra.Command{
-		Use: "config",
+		Use:   "config",
 		Short: "Get the internal configuration of the controller",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
@@ -90,14 +148,12 @@ func (c *cli) configCmd() *cobra.Command {
 
 			if err != nil {
 				fmt.Println(err)
-				return nil
+				return
 			}
 
 			fmt.Printf("Redis Port: %d\n", config.ProxyPort)
 			fmt.Printf("Idle limit (s): %d\n", config.IdleLimit)
 			fmt.Printf("Storage URL: %s\n", config.StorageUrl)
-			
-			return nil
 		},
 	}
 }
@@ -107,7 +163,7 @@ func (c *cli) pauseCmd() *cobra.Command {
 		Use:   "pause + <id>",
 		Short: "Pause a database",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
@@ -116,8 +172,8 @@ func (c *cli) pauseCmd() *cobra.Command {
 
 			if err != nil {
 				fmt.Println(err)
+				return
 			}
-			return nil
 		},
 	}
 }
@@ -127,7 +183,7 @@ func (c *cli) resumeCmd() *cobra.Command {
 		Use:   "resume + <id>",
 		Short: "Resume a database",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
@@ -136,8 +192,8 @@ func (c *cli) resumeCmd() *cobra.Command {
 
 			if err != nil {
 				fmt.Println(err)
+				return
 			}
-			return nil
 		},
 	}
 }
@@ -147,7 +203,7 @@ func (c *cli) deleteCmd() *cobra.Command {
 		Use:   "delete + <id>",
 		Short: "Delete a database",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
@@ -156,40 +212,39 @@ func (c *cli) deleteCmd() *cobra.Command {
 
 			if err != nil {
 				fmt.Println(err)
+				return
 			}
-			return nil
 		},
 	}
 }
 
-func (c * cli) statusCmd() *cobra.Command {
+func (c *cli) statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Print the status of the controlle",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
 			resp, err := c.client.GetControllerStatus(ctx, &emptypb.Empty{})
 			if err != nil {
 				fmt.Println(err)
-				return nil
+				return
 			}
 
 			fmt.Printf("Number of pods available: %d\n", resp.NumPodsAvailable)
 			fmt.Printf("Number of databases: %d\n", resp.NumDatabases)
-			return nil
 		},
 	}
 }
 
 func (c *cli) dbStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "db-status + <id>",
+		Use:   "status + <id>",
 		Short: "Print the status of all databases or just one specified by the id",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
@@ -200,7 +255,7 @@ func (c *cli) dbStatusCmd() *cobra.Command {
 
 				if err != nil {
 					fmt.Println(err)
-					return nil
+					return
 				}
 
 				statusResponses = databasesResp.GetStatuses()
@@ -211,7 +266,7 @@ func (c *cli) dbStatusCmd() *cobra.Command {
 
 				if err != nil {
 					fmt.Println(err)
-					return nil
+					return
 				}
 
 				statusResponses = map[string]*controller_pb.DatabaseStatus{
@@ -220,7 +275,7 @@ func (c *cli) dbStatusCmd() *cobra.Command {
 			}
 
 			printStatuses(cmd, statusResponses)
-			return nil
+			return
 		},
 	}
 }
@@ -265,7 +320,7 @@ func (c *cli) createCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a new database",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(cmd.Context(), requestTimeout)
 			defer cancel()
 
@@ -273,11 +328,11 @@ func (c *cli) createCmd() *cobra.Command {
 
 			if err != nil {
 				fmt.Println(err)
-				return err
+				return
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "id: %s\npassword: %s\n", resp.GetDatabaseId(), resp.GetPassword())
-			return nil
+			return
 		},
 	}
 }

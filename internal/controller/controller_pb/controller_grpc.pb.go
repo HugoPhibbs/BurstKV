@@ -30,6 +30,7 @@ const (
 	Controller_ResumeDatabase_FullMethodName       = "/controller.Controller/ResumeDatabase"
 	Controller_DeleteDatabase_FullMethodName       = "/controller.Controller/DeleteDatabase"
 	Controller_GetControllerConfig_FullMethodName  = "/controller.Controller/GetControllerConfig"
+	Controller_GetDatabaseAuthToken_FullMethodName = "/controller.Controller/GetDatabaseAuthToken"
 )
 
 // ControllerClient is the client API for Controller service.
@@ -46,6 +47,7 @@ type ControllerClient interface {
 	ResumeDatabase(ctx context.Context, in *ResumeDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetControllerConfig(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetControllerConfigResponse, error)
+	GetDatabaseAuthToken(ctx context.Context, in *GetDatabaseAuthTokenRequest, opts ...grpc.CallOption) (*GetDatabaseAuthTokenResponse, error)
 }
 
 type controllerClient struct {
@@ -156,6 +158,16 @@ func (c *controllerClient) GetControllerConfig(ctx context.Context, in *emptypb.
 	return out, nil
 }
 
+func (c *controllerClient) GetDatabaseAuthToken(ctx context.Context, in *GetDatabaseAuthTokenRequest, opts ...grpc.CallOption) (*GetDatabaseAuthTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDatabaseAuthTokenResponse)
+	err := c.cc.Invoke(ctx, Controller_GetDatabaseAuthToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControllerServer is the server API for Controller service.
 // All implementations must embed UnimplementedControllerServer
 // for forward compatibility.
@@ -170,6 +182,7 @@ type ControllerServer interface {
 	ResumeDatabase(context.Context, *ResumeDatabaseRequest) (*emptypb.Empty, error)
 	DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*emptypb.Empty, error)
 	GetControllerConfig(context.Context, *emptypb.Empty) (*GetControllerConfigResponse, error)
+	GetDatabaseAuthToken(context.Context, *GetDatabaseAuthTokenRequest) (*GetDatabaseAuthTokenResponse, error)
 	mustEmbedUnimplementedControllerServer()
 }
 
@@ -209,6 +222,9 @@ func (UnimplementedControllerServer) DeleteDatabase(context.Context, *DeleteData
 }
 func (UnimplementedControllerServer) GetControllerConfig(context.Context, *emptypb.Empty) (*GetControllerConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetControllerConfig not implemented")
+}
+func (UnimplementedControllerServer) GetDatabaseAuthToken(context.Context, *GetDatabaseAuthTokenRequest) (*GetDatabaseAuthTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDatabaseAuthToken not implemented")
 }
 func (UnimplementedControllerServer) mustEmbedUnimplementedControllerServer() {}
 func (UnimplementedControllerServer) testEmbeddedByValue()                    {}
@@ -411,6 +427,24 @@ func _Controller_GetControllerConfig_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Controller_GetDatabaseAuthToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDatabaseAuthTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServer).GetDatabaseAuthToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Controller_GetDatabaseAuthToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServer).GetDatabaseAuthToken(ctx, req.(*GetDatabaseAuthTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Controller_ServiceDesc is the grpc.ServiceDesc for Controller service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -457,6 +491,10 @@ var Controller_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetControllerConfig",
 			Handler:    _Controller_GetControllerConfig_Handler,
+		},
+		{
+			MethodName: "GetDatabaseAuthToken",
+			Handler:    _Controller_GetDatabaseAuthToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -518,6 +518,94 @@ func (x *GetControllerStatusResponse) GetNumDatabases() int64 {
 	return 0
 }
 
+type GetDatabaseAuthTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDatabaseAuthTokenRequest) Reset() {
+	*x = GetDatabaseAuthTokenRequest{}
+	mi := &file_proto_controller_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDatabaseAuthTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDatabaseAuthTokenRequest) ProtoMessage() {}
+
+func (x *GetDatabaseAuthTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDatabaseAuthTokenRequest.ProtoReflect.Descriptor instead.
+func (*GetDatabaseAuthTokenRequest) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetDatabaseAuthTokenRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+type GetDatabaseAuthTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDatabaseAuthTokenResponse) Reset() {
+	*x = GetDatabaseAuthTokenResponse{}
+	mi := &file_proto_controller_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDatabaseAuthTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDatabaseAuthTokenResponse) ProtoMessage() {}
+
+func (x *GetDatabaseAuthTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_controller_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDatabaseAuthTokenResponse.ProtoReflect.Descriptor instead.
+func (*GetDatabaseAuthTokenResponse) Descriptor() ([]byte, []int) {
+	return file_proto_controller_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetDatabaseAuthTokenResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
 type CreateDatabaseResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DatabaseId    string                 `protobuf:"bytes,1,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
@@ -528,7 +616,7 @@ type CreateDatabaseResponse struct {
 
 func (x *CreateDatabaseResponse) Reset() {
 	*x = CreateDatabaseResponse{}
-	mi := &file_proto_controller_proto_msgTypes[10]
+	mi := &file_proto_controller_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -540,7 +628,7 @@ func (x *CreateDatabaseResponse) String() string {
 func (*CreateDatabaseResponse) ProtoMessage() {}
 
 func (x *CreateDatabaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_controller_proto_msgTypes[10]
+	mi := &file_proto_controller_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -553,7 +641,7 @@ func (x *CreateDatabaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDatabaseResponse.ProtoReflect.Descriptor instead.
 func (*CreateDatabaseResponse) Descriptor() ([]byte, []int) {
-	return file_proto_controller_proto_rawDescGZIP(), []int{10}
+	return file_proto_controller_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CreateDatabaseResponse) GetDatabaseId() string {
@@ -579,7 +667,7 @@ type PauseDatabaseRequest struct {
 
 func (x *PauseDatabaseRequest) Reset() {
 	*x = PauseDatabaseRequest{}
-	mi := &file_proto_controller_proto_msgTypes[11]
+	mi := &file_proto_controller_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -591,7 +679,7 @@ func (x *PauseDatabaseRequest) String() string {
 func (*PauseDatabaseRequest) ProtoMessage() {}
 
 func (x *PauseDatabaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_controller_proto_msgTypes[11]
+	mi := &file_proto_controller_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -604,7 +692,7 @@ func (x *PauseDatabaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseDatabaseRequest.ProtoReflect.Descriptor instead.
 func (*PauseDatabaseRequest) Descriptor() ([]byte, []int) {
-	return file_proto_controller_proto_rawDescGZIP(), []int{11}
+	return file_proto_controller_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PauseDatabaseRequest) GetDatabaseId() string {
@@ -623,7 +711,7 @@ type ResumeDatabaseRequest struct {
 
 func (x *ResumeDatabaseRequest) Reset() {
 	*x = ResumeDatabaseRequest{}
-	mi := &file_proto_controller_proto_msgTypes[12]
+	mi := &file_proto_controller_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -635,7 +723,7 @@ func (x *ResumeDatabaseRequest) String() string {
 func (*ResumeDatabaseRequest) ProtoMessage() {}
 
 func (x *ResumeDatabaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_controller_proto_msgTypes[12]
+	mi := &file_proto_controller_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -648,7 +736,7 @@ func (x *ResumeDatabaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeDatabaseRequest.ProtoReflect.Descriptor instead.
 func (*ResumeDatabaseRequest) Descriptor() ([]byte, []int) {
-	return file_proto_controller_proto_rawDescGZIP(), []int{12}
+	return file_proto_controller_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ResumeDatabaseRequest) GetDatabaseId() string {
@@ -667,7 +755,7 @@ type DeleteDatabaseRequest struct {
 
 func (x *DeleteDatabaseRequest) Reset() {
 	*x = DeleteDatabaseRequest{}
-	mi := &file_proto_controller_proto_msgTypes[13]
+	mi := &file_proto_controller_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -679,7 +767,7 @@ func (x *DeleteDatabaseRequest) String() string {
 func (*DeleteDatabaseRequest) ProtoMessage() {}
 
 func (x *DeleteDatabaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_controller_proto_msgTypes[13]
+	mi := &file_proto_controller_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -692,7 +780,7 @@ func (x *DeleteDatabaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteDatabaseRequest.ProtoReflect.Descriptor instead.
 func (*DeleteDatabaseRequest) Descriptor() ([]byte, []int) {
-	return file_proto_controller_proto_rawDescGZIP(), []int{13}
+	return file_proto_controller_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DeleteDatabaseRequest) GetDatabaseId() string {
@@ -743,7 +831,12 @@ const file_proto_controller_proto_rawDesc = "" +
 	"\x03cpu\x18\x02 \x01(\x03R\x03cpu\"p\n" +
 	"\x1bGetControllerStatusResponse\x12,\n" +
 	"\x12num_pods_available\x18\x01 \x01(\x03R\x10numPodsAvailable\x12#\n" +
-	"\rnum_databases\x18\x02 \x01(\x03R\fnumDatabases\"U\n" +
+	"\rnum_databases\x18\x02 \x01(\x03R\fnumDatabases\">\n" +
+	"\x1bGetDatabaseAuthTokenRequest\x12\x1f\n" +
+	"\vdatabase_id\x18\x01 \x01(\tR\n" +
+	"databaseId\"4\n" +
+	"\x1cGetDatabaseAuthTokenResponse\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"U\n" +
 	"\x16CreateDatabaseResponse\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
 	"databaseId\x12\x1a\n" +
@@ -756,7 +849,7 @@ const file_proto_controller_proto_rawDesc = "" +
 	"databaseId\"8\n" +
 	"\x15DeleteDatabaseRequest\x12\x1f\n" +
 	"\vdatabase_id\x18\x01 \x01(\tR\n" +
-	"databaseId2\xe4\x06\n" +
+	"databaseId2\xcf\a\n" +
 	"\n" +
 	"Controller\x12f\n" +
 	"\x11GetSnapshotPutURL\x12'.controller.GetSnapshotUploadURLRequest\x1a(.controller.GetSnapshotUploadURLResponse\x12O\n" +
@@ -768,7 +861,8 @@ const file_proto_controller_proto_rawDesc = "" +
 	"\rPauseDatabase\x12 .controller.PauseDatabaseRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
 	"\x0eResumeDatabase\x12!.controller.ResumeDatabaseRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
 	"\x0eDeleteDatabase\x12!.controller.DeleteDatabaseRequest\x1a\x16.google.protobuf.Empty\x12V\n" +
-	"\x13GetControllerConfig\x12\x16.google.protobuf.Empty\x1a'.controller.GetControllerConfigResponseB+Z)burstkv/internal/controller/controller_pbb\x06proto3"
+	"\x13GetControllerConfig\x12\x16.google.protobuf.Empty\x1a'.controller.GetControllerConfigResponse\x12i\n" +
+	"\x14GetDatabaseAuthToken\x12'.controller.GetDatabaseAuthTokenRequest\x1a(.controller.GetDatabaseAuthTokenResponseB+Z)burstkv/internal/controller/controller_pbb\x06proto3"
 
 var (
 	file_proto_controller_proto_rawDescOnce sync.Once
@@ -782,7 +876,7 @@ func file_proto_controller_proto_rawDescGZIP() []byte {
 	return file_proto_controller_proto_rawDescData
 }
 
-var file_proto_controller_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_proto_controller_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_proto_controller_proto_goTypes = []any{
 	(*GetControllerConfigResponse)(nil),  // 0: controller.GetControllerConfigResponse
 	(*GetSnapshotUploadURLRequest)(nil),  // 1: controller.GetSnapshotUploadURLRequest
@@ -794,41 +888,45 @@ var file_proto_controller_proto_goTypes = []any{
 	(*GetAllDatabaseStatusResponse)(nil), // 7: controller.GetAllDatabaseStatusResponse
 	(*PodResource)(nil),                  // 8: controller.PodResource
 	(*GetControllerStatusResponse)(nil),  // 9: controller.GetControllerStatusResponse
-	(*CreateDatabaseResponse)(nil),       // 10: controller.CreateDatabaseResponse
-	(*PauseDatabaseRequest)(nil),         // 11: controller.PauseDatabaseRequest
-	(*ResumeDatabaseRequest)(nil),        // 12: controller.ResumeDatabaseRequest
-	(*DeleteDatabaseRequest)(nil),        // 13: controller.DeleteDatabaseRequest
-	nil,                                  // 14: controller.GetAllDatabaseStatusResponse.StatusesEntry
-	(*emptypb.Empty)(nil),                // 15: google.protobuf.Empty
+	(*GetDatabaseAuthTokenRequest)(nil),  // 10: controller.GetDatabaseAuthTokenRequest
+	(*GetDatabaseAuthTokenResponse)(nil), // 11: controller.GetDatabaseAuthTokenResponse
+	(*CreateDatabaseResponse)(nil),       // 12: controller.CreateDatabaseResponse
+	(*PauseDatabaseRequest)(nil),         // 13: controller.PauseDatabaseRequest
+	(*ResumeDatabaseRequest)(nil),        // 14: controller.ResumeDatabaseRequest
+	(*DeleteDatabaseRequest)(nil),        // 15: controller.DeleteDatabaseRequest
+	nil,                                  // 16: controller.GetAllDatabaseStatusResponse.StatusesEntry
+	(*emptypb.Empty)(nil),                // 17: google.protobuf.Empty
 }
 var file_proto_controller_proto_depIdxs = []int32{
 	8,  // 0: controller.DatabaseStatus.max_pod_resources:type_name -> controller.PodResource
 	8,  // 1: controller.DatabaseStatus.used_pod_resources:type_name -> controller.PodResource
 	5,  // 2: controller.GetDatabaseStatusResponse.status:type_name -> controller.DatabaseStatus
-	14, // 3: controller.GetAllDatabaseStatusResponse.statuses:type_name -> controller.GetAllDatabaseStatusResponse.StatusesEntry
+	16, // 3: controller.GetAllDatabaseStatusResponse.statuses:type_name -> controller.GetAllDatabaseStatusResponse.StatusesEntry
 	5,  // 4: controller.GetAllDatabaseStatusResponse.StatusesEntry.value:type_name -> controller.DatabaseStatus
 	1,  // 5: controller.Controller.GetSnapshotPutURL:input_type -> controller.GetSnapshotUploadURLRequest
 	2,  // 6: controller.Controller.RequestMigration:input_type -> controller.RequestMigrationRequest
 	4,  // 7: controller.Controller.GetDatabaseStatus:input_type -> controller.GetDatabaseStatusRequest
-	15, // 8: controller.Controller.GetAllDatabaseStatus:input_type -> google.protobuf.Empty
-	15, // 9: controller.Controller.GetControllerStatus:input_type -> google.protobuf.Empty
-	15, // 10: controller.Controller.CreateDatabase:input_type -> google.protobuf.Empty
-	11, // 11: controller.Controller.PauseDatabase:input_type -> controller.PauseDatabaseRequest
-	12, // 12: controller.Controller.ResumeDatabase:input_type -> controller.ResumeDatabaseRequest
-	13, // 13: controller.Controller.DeleteDatabase:input_type -> controller.DeleteDatabaseRequest
-	15, // 14: controller.Controller.GetControllerConfig:input_type -> google.protobuf.Empty
-	3,  // 15: controller.Controller.GetSnapshotPutURL:output_type -> controller.GetSnapshotUploadURLResponse
-	15, // 16: controller.Controller.RequestMigration:output_type -> google.protobuf.Empty
-	6,  // 17: controller.Controller.GetDatabaseStatus:output_type -> controller.GetDatabaseStatusResponse
-	7,  // 18: controller.Controller.GetAllDatabaseStatus:output_type -> controller.GetAllDatabaseStatusResponse
-	9,  // 19: controller.Controller.GetControllerStatus:output_type -> controller.GetControllerStatusResponse
-	10, // 20: controller.Controller.CreateDatabase:output_type -> controller.CreateDatabaseResponse
-	15, // 21: controller.Controller.PauseDatabase:output_type -> google.protobuf.Empty
-	15, // 22: controller.Controller.ResumeDatabase:output_type -> google.protobuf.Empty
-	15, // 23: controller.Controller.DeleteDatabase:output_type -> google.protobuf.Empty
-	0,  // 24: controller.Controller.GetControllerConfig:output_type -> controller.GetControllerConfigResponse
-	15, // [15:25] is the sub-list for method output_type
-	5,  // [5:15] is the sub-list for method input_type
+	17, // 8: controller.Controller.GetAllDatabaseStatus:input_type -> google.protobuf.Empty
+	17, // 9: controller.Controller.GetControllerStatus:input_type -> google.protobuf.Empty
+	17, // 10: controller.Controller.CreateDatabase:input_type -> google.protobuf.Empty
+	13, // 11: controller.Controller.PauseDatabase:input_type -> controller.PauseDatabaseRequest
+	14, // 12: controller.Controller.ResumeDatabase:input_type -> controller.ResumeDatabaseRequest
+	15, // 13: controller.Controller.DeleteDatabase:input_type -> controller.DeleteDatabaseRequest
+	17, // 14: controller.Controller.GetControllerConfig:input_type -> google.protobuf.Empty
+	10, // 15: controller.Controller.GetDatabaseAuthToken:input_type -> controller.GetDatabaseAuthTokenRequest
+	3,  // 16: controller.Controller.GetSnapshotPutURL:output_type -> controller.GetSnapshotUploadURLResponse
+	17, // 17: controller.Controller.RequestMigration:output_type -> google.protobuf.Empty
+	6,  // 18: controller.Controller.GetDatabaseStatus:output_type -> controller.GetDatabaseStatusResponse
+	7,  // 19: controller.Controller.GetAllDatabaseStatus:output_type -> controller.GetAllDatabaseStatusResponse
+	9,  // 20: controller.Controller.GetControllerStatus:output_type -> controller.GetControllerStatusResponse
+	12, // 21: controller.Controller.CreateDatabase:output_type -> controller.CreateDatabaseResponse
+	17, // 22: controller.Controller.PauseDatabase:output_type -> google.protobuf.Empty
+	17, // 23: controller.Controller.ResumeDatabase:output_type -> google.protobuf.Empty
+	17, // 24: controller.Controller.DeleteDatabase:output_type -> google.protobuf.Empty
+	0,  // 25: controller.Controller.GetControllerConfig:output_type -> controller.GetControllerConfigResponse
+	11, // 26: controller.Controller.GetDatabaseAuthToken:output_type -> controller.GetDatabaseAuthTokenResponse
+	16, // [16:27] is the sub-list for method output_type
+	5,  // [5:16] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -845,7 +943,7 @@ func file_proto_controller_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_controller_proto_rawDesc), len(file_proto_controller_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
